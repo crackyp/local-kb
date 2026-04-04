@@ -39,7 +39,15 @@ cd local-kb
 ./scripts/setup_mac.sh phi4-mini
 ```
 
-### Option B: Manual setup
+### Option B: Recommended (Windows PowerShell)
+
+```powershell
+git clone https://github.com/crackyp/local-kb.git
+cd local-kb
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1 -Model phi4-mini
+```
+
+### Option C: Manual setup (any OS)
 
 ```bash
 git clone https://github.com/crackyp/local-kb.git
@@ -74,11 +82,21 @@ python3 scripts/kb.py lint
 Launch UI:
 
 ```bash
+# macOS/Linux
 python3 -m pip install --user -r requirements.txt
 python3 -m streamlit run app.py
 
 # or helper script
 ./scripts/run_ui.sh
+```
+
+```powershell
+# Windows
+py -m pip install -r requirements.txt
+py -m streamlit run app.py
+
+# or helper script
+powershell -ExecutionPolicy Bypass -File .\scripts\run_ui.ps1
 ```
 
 The UI includes tabs for:
@@ -95,6 +113,8 @@ Use the sidebar to set your default model (e.g., `phi4-mini`).
 ---
 
 ## Command Reference
+
+> Windows tip: replace `python3` with `py` in the commands below.
 
 ### 1) Ingest local files
 
@@ -289,6 +309,21 @@ python3 -m pip install --user -r requirements.txt
 
 ### Setup script says Homebrew missing
 If Ollama already works, skip setup script and run commands manually.
+
+### PowerShell blocks script execution
+Run with temporary bypass:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1 -Model phi4-mini
+```
+
+### `py` command not found on Windows
+Use `python` instead:
+
+```powershell
+python -m pip install -r requirements.txt
+python -m streamlit run app.py
+```
 
 ---
 

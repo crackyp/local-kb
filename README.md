@@ -27,12 +27,17 @@ local-kb/
     index/        # internal incremental state and indexes
   app.py          # Streamlit UI
   scripts/
-    kb.py         # main CLI
-    setup_mac.sh  # one-shot mac setup helper
+    kb.py               # main CLI
+    setup_mac.sh        # one-shot mac setup helper
+    setup_windows.ps1   # one-shot Windows setup helper
+    run_ui.sh           # macOS/Linux UI launcher
+    run_ui.ps1          # Windows UI launcher
   requirements.txt
 ```
 
-## 1) Quick start (macOS)
+## 1) Quick start
+
+### macOS
 
 ```bash
 git clone https://github.com/crackyp/local-kb.git
@@ -40,19 +45,19 @@ cd local-kb
 ./scripts/setup_mac.sh phi4-mini
 ```
 
-Then either use CLI or UI:
+### Windows (PowerShell)
 
-```bash
-# CLI
-python3 scripts/kb.py compile --model phi4-mini
-python3 scripts/kb.py ask "What is this project for?" --model phi4-mini
-
-# UI
-python3 -m pip install --user -r requirements.txt
-python3 -m streamlit run app.py
+```powershell
+git clone https://github.com/crackyp/local-kb.git
+cd local-kb
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1 -Model phi4-mini
 ```
 
+Then either use CLI or UI.
+
 ## 2) Daily workflow
+
+> On Windows, replace `python3` with `py` and use Windows-style paths.
 
 ```bash
 # Add source files
@@ -80,11 +85,21 @@ python3 scripts/kb.py lint
 Start the app:
 
 ```bash
+# macOS/Linux
 python3 -m pip install --user -r requirements.txt
 python3 -m streamlit run app.py
 
 # or helper script
 ./scripts/run_ui.sh
+```
+
+```powershell
+# Windows
+py -m pip install -r requirements.txt
+py -m streamlit run app.py
+
+# or helper script
+powershell -ExecutionPolicy Bypass -File .\scripts\run_ui.ps1
 ```
 
 UI tabs:
