@@ -245,6 +245,39 @@ def tab_lint() -> None:
 def tab_explorer() -> None:
     st.subheader("File Explorer")
 
+    st.markdown("#### Raw files (manage sources)")
+    raw_files = sorted([p for p in RAW_DIR.glob("**/*") if p.is_file()], key=lambda p: p.stat().st_mtime, reverse=True)
+
+    if not raw_files:
+        st.info("No raw files yet.")
+    else:
+        raw_options = [str(p.relative_to(RAW_DIR)) for p in raw_files]
+        picked_raw = st.selectbox("Pick raw file", options=raw_options, key="raw_pick")
+        raw_path = RAW_DIR / picked_raw
+
+        st.caption(f"Location: kb/raw/{picked_raw}")
+
+        if raw_path.suffix.lower() in {".md", ".txt", ".json", ".yaml", ".yml", ".xml", ".csv", ".html", ".htm", ".py", ".js", ".ts", ".sql", ".log"}:
+            with st.expander("Preview", expanded=False):
+                st.markdown(raw_path.read_text(encoding="utf-8", errors="ignore")[:12000])
+        else:
+            st.caption("Preview unavailable for this file type.")
+
+        st.warning("Delete removes this source file from kb/raw. Run Compile with Force to refresh wiki pages.")
+        confirm_delete = st.checkbox("I understand, delete this raw file", key="confirm_delete_raw")
+        if st.button("Delete selected raw file", type="secondary", use_container_width=True):
+            if not confirm_delete:
+                st.warning("Please confirm deletion first.")
+            else:
+                try:
+                    raw_path.unlink()
+                    st.success(f"Deleted: kb/raw/{picked_raw}")
+                    st.info("Next step: go to Compile tab and run Force recompile all docs.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Could not delete file: {e}")
+
+    st.markdown("---")
     col1, col2 = st.columns(2)
 
     with col1:
@@ -257,6 +290,20 @@ def tab_explorer() -> None:
             selected = st.selectbox("Pick wiki file", options=options, key="wiki_pick")
             path = WIKI_DIR / selected
             st.markdown(path.read_text(encoding="utf-8", errors="ignore"))
+
+            st.warning("Delete removes this compiled wiki page only. Re-running Compile may recreate it if source docs still exist.")
+            confirm_delete_wiki = st.checkbox("I understand, delete this wiki page", key="confirm_delete_wiki")
+            if st.button("Delete selected wiki page", type="secondary", use_container_width=True):
+                if not confirm_delete_wiki:
+                    st.warning("Please confirm deletion first.")
+                else:
+                    try:
+                        path.unlink()
+                        st.success(f"Deleted: kb/wiki/{selected}")
+                        st.info("If you want it gone permanently, also delete related source files from kb/raw.")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not delete wiki page: {e}")
 
     with col2:
         st.markdown("#### Output files")
