@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Local runtime artifacts (keep directory skeleton only)
+kb/raw/*
+!kb/raw/.gitkeep
+!kb/raw/assets/
+kb/raw/assets/*
+!kb/raw/assets/.gitkeep
+
+kb/wiki/*
+!kb/wiki/.gitkeep
+
+kb/outputs/*
+!kb/outputs/.gitkeep
+
+kb/index/*
+!kb/index/.gitkeep
