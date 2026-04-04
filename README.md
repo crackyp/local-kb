@@ -13,6 +13,7 @@ You collect source material in `kb/raw/`, run a compile step with a local LLM (O
 - Compile raw docs into wiki pages (`compile`)
 - Ask questions over wiki pages and save answers (`ask`)
 - Lint wiki links and find orphans (`lint`)
+- Optional Streamlit UI (`app.py`) for click-first usage
 
 ## Repo layout
 
@@ -24,6 +25,7 @@ local-kb/
     wiki/         # compiled wiki pages
     outputs/      # Q&A/report markdown outputs
     index/        # internal incremental state and indexes
+  app.py          # Streamlit UI
   scripts/
     kb.py         # main CLI
     setup_mac.sh  # one-shot mac setup helper
@@ -38,11 +40,16 @@ cd local-kb
 ./scripts/setup_mac.sh phi4-mini
 ```
 
-Then:
+Then either use CLI or UI:
 
 ```bash
+# CLI
 python3 scripts/kb.py compile --model phi4-mini
 python3 scripts/kb.py ask "What is this project for?" --model phi4-mini
+
+# UI
+python3 -m pip install --user -r requirements.txt
+python3 -m streamlit run app.py
 ```
 
 ## 2) Daily workflow
@@ -68,7 +75,28 @@ python3 scripts/kb.py ask "What are the key themes and contradictions?" --model 
 python3 scripts/kb.py lint
 ```
 
-## 3) Supported input formats
+## 3) UI mode (Streamlit)
+
+Start the app:
+
+```bash
+python3 -m pip install --user -r requirements.txt
+python3 -m streamlit run app.py
+
+# or helper script
+./scripts/run_ui.sh
+```
+
+UI tabs:
+- Ingest Files
+- Ingest URL
+- Ingest PDF
+- Compile
+- Ask
+- Lint
+- Explorer
+
+## 4) Supported input formats
 
 ### Best-supported now
 - `.md`, `.txt`
@@ -84,11 +112,11 @@ python3 scripts/kb.py lint
 - audio/video
 - Office docs (`.docx`, `.pptx`) unless you export to text/markdown first
 
-## 4) Full user guide
+## 5) Full user guide
 
 See: [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)
 
-## 5) Notes
+## 6) Notes
 
 - This is local-first and model-agnostic for Ollama model names.
 - `compile` is incremental by default; use `--force` to recompile everything.

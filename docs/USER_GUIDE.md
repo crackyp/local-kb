@@ -14,6 +14,8 @@ Flow:
 3. Ask questions and save markdown outputs to `kb/outputs/`
 4. Lint links and keep the wiki healthy
 
+You can do this either from CLI (`scripts/kb.py`) or from the Streamlit UI (`app.py`).
+
 ---
 
 ## Prerequisites
@@ -23,6 +25,7 @@ Flow:
 - Ollama running locally
 - One pulled model (examples: `phi4-mini`, `qwen2.5:7b`)
 - Optional for PDF support: `pypdf`
+- Optional UI: `streamlit`
 
 ---
 
@@ -63,6 +66,31 @@ python3 scripts/kb.py compile --model phi4-mini
 python3 scripts/kb.py ask "What is this project for?" --model phi4-mini
 python3 scripts/kb.py lint
 ```
+
+---
+
+## UI Mode (Streamlit)
+
+Launch UI:
+
+```bash
+python3 -m pip install --user -r requirements.txt
+python3 -m streamlit run app.py
+
+# or helper script
+./scripts/run_ui.sh
+```
+
+The UI includes tabs for:
+- Ingest Files
+- Ingest URL
+- Ingest PDF
+- Compile
+- Ask
+- Lint
+- Explorer
+
+Use the sidebar to set your default model (e.g., `phi4-mini`).
 
 ---
 
