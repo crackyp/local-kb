@@ -22,3 +22,6 @@ kb/outputs/*
 
 kb/index/*
 !kb/index/.gitkeep
+
+# Temp upload staging
+.tmp_uploads/

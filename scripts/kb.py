@@ -31,7 +31,49 @@ TEXT_EXTENSIONS = {
     ".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".go", ".rs", ".c", ".cpp",
     ".h", ".hpp", ".ipynb", ".log", ".ini", ".cfg", ".toml", ".sql", ".sh",
 }
+EXTRACTABLE_EXTENSIONS = {".docx", ".pdf"}
 SKIP_PARTS = {"assets", ".git", "node_modules", "__pycache__"}
+
+# ---------------------------------------------------------------------------
+# Configuration (reads kb.toml at project root, falls back to defaults)
+# ---------------------------------------------------------------------------
+
+_CFG_DEFAULTS = {
+    "model": {"default": "phi4-mini"},
+    "ollama": {"url": "http://127.0.0.1:11434", "timeout": 240},
+    "compile": {"temperature": 0.2, "max_source_chars": 12000},
+    "ask": {"temperature": 0.1, "context_per_page": 5000, "default_limit": 6},
+    "ingest": {"max_content_chars": 120000},
+}
+
+
+def _load_config() -> dict:
+    cfg = json.loads(json.dumps(_CFG_DEFAULTS))  # deep copy
+    toml_path = ROOT / "kb.toml"
+    if not toml_path.exists():
+        return cfg
+    try:
+        import tomllib  # Python 3.11+
+    except ModuleNotFoundError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ModuleNotFoundError:
+            return cfg
+    try:
+        with open(toml_path, "rb") as f:
+            user = tomllib.load(f)
+        for section, defaults in _CFG_DEFAULTS.items():
+            if section in user:
+                for key, default_val in defaults.items():
+                    if key in user[section]:
+                        val = user[section][key]
+                        cfg[section][key] = type(default_val)(val)
+    except Exception:
+        pass
+    return cfg
+
+
+CFG = _load_config()
 
 
 def ensure_dirs():
@@ -68,7 +110,7 @@ def unique_path(path: Path) -> Path:
 
 def read_text(path: Path) -> str:
     try:
-        return path.read_text(encoding="utf-8", errors="ignore")
+        return path.read_text(encoding="utf-8-sig", errors="ignore")
     except Exception:
         return ""
 
@@ -109,9 +151,11 @@ def should_compile_file(path: Path) -> bool:
         return False
     if not path.is_file():
         return False
+    if path.name == ".gitkeep":
+        return False
 
     suffix = path.suffix.lower()
-    if suffix in TEXT_EXTENSIONS:
+    if suffix in TEXT_EXTENSIONS or suffix in EXTRACTABLE_EXTENSIONS:
         return True
 
     # Fallback sniff for text-like files with uncommon extensions.
@@ -125,6 +169,15 @@ def should_compile_file(path: Path) -> bool:
         return False
 
 
+def ping_ollama() -> bool:
+    try:
+        req = urllib.request.Request(CFG["ollama"]["url"] + "/", method="GET")
+        with urllib.request.urlopen(req, timeout=5):
+            return True
+    except Exception:
+        return False
+
+
 def ollama_generate(prompt: str, model: str, temperature: float = 0.2) -> str:
     payload = {
         "model": model,
@@ -133,13 +186,13 @@ def ollama_generate(prompt: str, model: str, temperature: float = 0.2) -> str:
         "options": {"temperature": temperature},
     }
     req = urllib.request.Request(
-        "http://127.0.0.1:11434/api/generate",
+        CFG["ollama"]["url"] + "/api/generate",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=240) as resp:
+        with urllib.request.urlopen(req, timeout=CFG["ollama"]["timeout"]) as resp:
             body = json.loads(resp.read().decode("utf-8"))
             return body.get("response", "").strip()
     except urllib.error.HTTPError as e:
@@ -213,7 +266,7 @@ Fetched: {dt.datetime.now().isoformat()}
 
 ## Content
 
-{cleaned[:120000]}
+{cleaned[:CFG["ingest"]["max_content_chars"]]}
 """
     return title, markdown, image_urls
 
@@ -275,6 +328,19 @@ def extract_pdf_text(pdf_path: Path, max_pages: int | None = None) -> str:
     return "".join(chunks).strip()
 
 
+def extract_docx_text(docx_path: Path) -> str:
+    try:
+        from docx import Document  # type: ignore
+    except Exception:
+        raise RuntimeError(
+            "DOCX extraction requires python-docx. Install with: pip install python-docx"
+        )
+
+    doc = Document(str(docx_path))
+    paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+    return "\n\n".join(paragraphs)
+
+
 def build_wiki_index():
     index = {}
     for path in sorted(WIKI.glob("*.md")):
@@ -314,6 +380,8 @@ def cmd_ingest(args):
 def cmd_ingest_url(args):
     ensure_dirs()
     added = 0
+    failed_urls = []
+    failed_images = []
 
     for input_url in args.urls:
         url = input_url.strip()
@@ -324,6 +392,7 @@ def cmd_ingest_url(args):
             content, ctype = fetch_url(url, timeout=args.timeout)
         except Exception as e:
             print(f"! Failed {url}: {e}")
+            failed_urls.append((url, str(e)))
             continue
 
         text = decode_bytes(content, ctype)
@@ -339,7 +408,7 @@ Content-Type: {ctype or 'unknown'}
 
 ## Content
 
-{text[:120000]}
+{text[:CFG["ingest"]["max_content_chars"]]}
 """
             image_urls = []
 
@@ -355,7 +424,8 @@ Content-Type: {ctype or 'unknown'}
                 try:
                     name = download_image(img_url, img_dir, i, timeout=args.timeout)
                     downloaded.append(name)
-                except Exception:
+                except Exception as e:
+                    failed_images.append((img_url, str(e)))
                     continue
 
             if downloaded:
@@ -367,6 +437,14 @@ Content-Type: {ctype or 'unknown'}
         print(f"+ {out_path} ({title[:70]})")
 
     print(f"URL ingest complete. Added {added} page(s).")
+    if failed_urls:
+        print(f"\nFailed URLs ({len(failed_urls)}):")
+        for url, err in failed_urls:
+            print(f"  - {url}: {err}")
+    if failed_images:
+        print(f"\nFailed image downloads ({len(failed_images)}):")
+        for img_url, err in failed_images[:20]:
+            print(f"  - {img_url}: {err}")
 
 
 def cmd_ingest_pdf(args):
@@ -423,7 +501,7 @@ Requirements:
 Source file: {filename}
 
 SOURCE:
-{text[:12000]}
+{text[:CFG["compile"]["max_source_chars"]]}
 """
     return ollama_generate(prompt, model=model)
 
@@ -461,14 +539,33 @@ Auto-generated fallback page because the model returned an empty response.
 
 def cmd_compile(args):
     ensure_dirs()
+    if not ping_ollama():
+        raise RuntimeError("Ollama is not running. Start it with: ollama serve")
     state = load_json(STATE_FILE, {"compiled": {}})
     docs_index = load_json(DOC_INDEX_FILE, {})
 
     raw_files = sorted([p for p in RAW.glob("**/*") if should_compile_file(p)])
     compiled_now = 0
+    skipped = []
 
     for path in raw_files:
-        text = read_text(path)
+        suffix = path.suffix.lower()
+        if suffix == ".docx":
+            try:
+                text = extract_docx_text(path)
+            except Exception as e:
+                print(f"! Skipping {path.name}: {e}")
+                skipped.append((path.name, str(e)))
+                continue
+        elif suffix == ".pdf":
+            try:
+                text = extract_pdf_text(path)
+            except Exception as e:
+                print(f"! Skipping {path.name}: {e}")
+                skipped.append((path.name, str(e)))
+                continue
+        else:
+            text = read_text(path)
         if not text.strip():
             continue
 
@@ -509,21 +606,51 @@ def cmd_compile(args):
 
     save_json(STATE_FILE, state)
     save_json(DOC_INDEX_FILE, docs_index)
-    build_wiki_index()
+    if compiled_now > 0:
+        build_wiki_index()
     print(f"Compile complete. Updated {compiled_now} document(s).")
+    if skipped:
+        print(f"\nSkipped {len(skipped)} file(s):")
+        for name, err in skipped:
+            print(f"  - {name}: {err}")
 
 
 def relevant_pages(question: str, limit: int = 6):
-    q_terms = set(re.findall(r"[a-zA-Z0-9]{3,}", question.lower()))
-    scores = []
-    all_pages = list(WIKI.glob("*.md"))
+    import math
 
+    q_terms = set(re.findall(r"[a-zA-Z0-9]{3,}", question.lower()))
+    all_pages = list(WIKI.glob("*.md"))
+    if not all_pages or not q_terms:
+        all_pages.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        return all_pages[:limit]
+
+    # Build per-page term frequencies and document frequencies
+    page_tokens = []
     for p in all_pages:
-        text = read_text(p).lower()
-        terms = set(re.findall(r"[a-zA-Z0-9]{3,}", text))
-        overlap = len(q_terms & terms)
-        if overlap > 0:
-            scores.append((overlap, p))
+        tokens = re.findall(r"[a-zA-Z0-9]{3,}", read_text(p).lower())
+        freq = {}
+        for t in tokens:
+            freq[t] = freq.get(t, 0) + 1
+        page_tokens.append(freq)
+
+    n_docs = len(all_pages)
+    doc_freq = {}
+    for freq in page_tokens:
+        for t in freq:
+            doc_freq[t] = doc_freq.get(t, 0) + 1
+
+    scores = []
+    for i, freq in enumerate(page_tokens):
+        score = 0.0
+        for term in q_terms:
+            tf = freq.get(term, 0)
+            if tf == 0:
+                continue
+            df = doc_freq.get(term, 1)
+            idf = math.log((n_docs + 1) / (df + 1)) + 1
+            score += (1 + math.log(tf)) * idf
+        if score > 0:
+            scores.append((score, all_pages[i]))
 
     scores.sort(key=lambda x: x[0], reverse=True)
     if scores:
@@ -535,6 +662,8 @@ def relevant_pages(question: str, limit: int = 6):
 
 def cmd_ask(args):
     ensure_dirs()
+    if not ping_ollama():
+        raise RuntimeError("Ollama is not running. Start it with: ollama serve")
     pages = relevant_pages(args.question, limit=args.limit)
     if not pages:
         print("No relevant wiki pages found. Run compile first.")
@@ -542,7 +671,7 @@ def cmd_ask(args):
 
     context_chunks = []
     for p in pages:
-        context_chunks.append(f"## {p.name}\n" + read_text(p)[:5000])
+        context_chunks.append(f"## {p.name}\n" + read_text(p)[:CFG["ask"]["context_per_page"]])
     context = "\n\n".join(context_chunks)
 
     prompt = f"""You are answering a research question using the provided wiki pages.
@@ -558,7 +687,7 @@ Question: {args.question}
 WIKI CONTEXT:
 {context}
 """
-    answer = ollama_generate(prompt, model=args.model, temperature=0.1)
+    answer = ollama_generate(prompt, model=args.model, temperature=CFG["ask"]["temperature"])
 
     ts = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     out_path = OUTPUTS / f"qa-{ts}.md"
@@ -621,14 +750,14 @@ def build_parser():
     p_ingest_pdf.set_defaults(func=cmd_ingest_pdf)
 
     p_compile = sub.add_parser("compile", help="Compile raw docs into wiki pages")
-    p_compile.add_argument("--model", default="qwen2.5:14b")
+    p_compile.add_argument("--model", default=CFG["model"]["default"])
     p_compile.add_argument("--force", action="store_true")
     p_compile.set_defaults(func=cmd_compile)
 
     p_ask = sub.add_parser("ask", help="Answer question from wiki and write markdown output")
     p_ask.add_argument("question")
-    p_ask.add_argument("--model", default="qwen2.5:14b")
-    p_ask.add_argument("--limit", type=int, default=6)
+    p_ask.add_argument("--model", default=CFG["model"]["default"])
+    p_ask.add_argument("--limit", type=int, default=CFG["ask"]["default_limit"])
     p_ask.set_defaults(func=cmd_ask)
 
     p_lint = sub.add_parser("lint", help="Check link integrity/orphans in wiki")

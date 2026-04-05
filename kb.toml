@@ -1,0 +1,21 @@
+# Local KB configuration
+# Edit these values to customise behaviour. Delete any line to use its default.
+
+[model]
+default = "phi4-mini"
+
+[ollama]
+url = "http://127.0.0.1:11434"
+timeout = 240           # seconds per LLM call
+
+[compile]
+temperature = 0.2
+max_source_chars = 12000  # chars sent to the LLM per source doc
+
+[ask]
+temperature = 0.1
+context_per_page = 5000   # chars loaded per wiki page
+default_limit = 6         # number of wiki pages to include
+
+[ingest]
+max_content_chars = 120000  # URL / non-PDF content truncation limit

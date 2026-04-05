@@ -176,7 +176,7 @@ def pick_model(default: str, key: str) -> str:
 
 def render_sidebar() -> str:
     st.sidebar.title("Local KB")
-    st.sidebar.caption("Powered by Ollama")
+    st.sidebar.caption("Ollama + Obsidian")
 
     if st.sidebar.button("Refresh", use_container_width=True, help="Re-scan files from disk"):
         st.rerun()
