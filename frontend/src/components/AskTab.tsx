@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
 import type { StatusResponse, QaHistoryEntry, AskResponse } from "@/types";
 
@@ -89,8 +90,8 @@ export function AskTab() {
       {result && result.answer && (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <h3 className="font-semibold text-slate-900 mb-3">Answer</h3>
-          <div className="prose prose-sm max-w-none">
-            <pre className="whitespace-pre-wrap text-sm text-slate-700">{result.answer}</pre>
+          <div className="prose prose-slate prose-sm max-w-none bg-slate-50 rounded-lg p-4">
+            <ReactMarkdown>{result.answer}</ReactMarkdown>
           </div>
           {result.written_file && (
             <button

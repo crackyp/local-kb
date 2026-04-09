@@ -83,6 +83,12 @@ def _load_config() -> dict:
         pass
     return cfg
 
+def load_agents_md() -> str:
+    """Load AGENTS.md and return its content as a system instruction."""
+    agents_path = Path(__file__).parent.parent / "AGENTS.md"  # points to root AGENTS.md
+    if agents_path.exists():
+        return agents_path.read_text(encoding="utf-8").strip()
+    return "# No AGENTS.md found — using default behavior"
 
 CFG = _load_config()
 
@@ -539,32 +545,131 @@ def find_matching_wiki_page(text: str, cfg: dict):
 
 
 def update_doc(filename: str, text: str, existing_wiki: str, model: str) -> str:
-    """Merge new source material into an existing wiki article."""
+    """Merge new source ONLY if relevant. Never replace the whole article."""
+    agents = load_agents_md()
     max_wiki = CFG["compile"]["max_wiki_chars"]
     max_source = CFG["compile"]["max_source_chars"]
-    prompt = f"""You are updating a personal research wiki article with new source material.
-Merge the new information into the existing article. Preserve the existing structure and content.
-Add new facts, quotes, and points. Do not remove existing content unless it's contradicted.
-Keep the same markdown format with: Summary, Key Points, Notable Quotes, Open Questions, Related Concepts.
-Add 3-8 wiki style links in markdown form like [Concept](concept.md) when relevant.
+    
+    prompt = f"""{agents}
+
+You are updating an EXISTING wiki article with NEW source material.
+CRITICAL SAFETY RULES (follow exactly):
+1. FIRST decide if the new source is meaningfully relevant to this article.
+2. If it is NOT relevant (different topic, unrelated facts, etc.), respond with exactly this line and nothing else:
+   NO_MERGE_NEEDED: Source is irrelevant to this article.
+3. If it IS relevant:
+   - Merge ONLY the new information.
+   - Preserve ALL existing structure, sections, and content.
+   - NEVER delete, overwrite, or replace large parts of the existing article.
+   - Only add new facts, quotes, or sections.
+   - If something is contradicted, note it in a new "Contradictions / Updates" subsection at the bottom.
+   - Keep the same markdown format and style.
 
 EXISTING ARTICLE:
 {existing_wiki[:max_wiki]}
 
-NEW SOURCE ({filename}):
+NEW SOURCE FILE: {filename}
+NEW SOURCE:
 {text[:max_source]}
 """
     return ollama_generate(prompt, model=model)
 
 
+def consolidate_similar_wiki_pages(model: str):
+    """Auto-merge highly similar wiki pages after a full compile."""
+    if not CFG["compile"].get("consolidate_similar", True):
+        return
+
+    wiki_dir = Path(__file__).parent.parent / "kb" / "wiki"
+    wiki_files = list(wiki_dir.glob("*.md"))
+    if len(wiki_files) < 2:
+        return
+
+    print(f"Running auto-consolidation on {len(wiki_files)} wiki pages...")
+
+    embed_model = CFG["faiss"]["embed_model"]
+
+    embeddings = []
+    page_contents = []
+    page_paths = []
+
+    for f in wiki_files:
+        text = f.read_text(encoding="utf-8")
+        short = text[:1000].strip()
+        payload = json.dumps({"model": embed_model, "prompt": short}).encode("utf-8")
+        req = urllib.request.Request(
+            CFG["ollama"]["url"] + "/api/embeddings",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            response = json.loads(resp.read().decode("utf-8"))
+        embeddings.append(response["embedding"])
+        page_contents.append(text)
+        page_paths.append(f)
+
+    import numpy as np
+    import faiss
+    embeddings_np = np.array(embeddings).astype("float32")
+    dimension = len(embeddings[0])
+    index = faiss.IndexFlatIP(dimension)
+    index.add(embeddings_np)
+
+    threshold = CFG["compile"].get("consolidation_threshold", 0.92)
+    merged_count = 0
+    consumed = set()
+
+    for i in range(len(wiki_files)):
+        if i in consumed:
+            continue
+        D, I = index.search(embeddings_np[i:i+1], 5)
+        for dist, idx in zip(D[0][1:], I[0][1:]):
+            if dist >= threshold and idx > i and idx not in consumed:
+                print(f"  Merging similar pages: {page_paths[i].name} + {page_paths[idx].name}")
+
+                prompt = f"""You are consolidating two highly similar wiki articles into ONE.
+CRITICAL RULES:
+- Merge ALL content from both into the FIRST article.
+- Preserve the original structure, sections, and markdown style of the first article.
+- Add new facts, quotes, and insights from the second article.
+- If there are contradictions, add a "Contradictions / Updates" section at the bottom.
+- Never delete or overwrite large existing sections unless they are fully superseded.
+- Keep the filename of the first article.
+- Output ONLY the full merged markdown (no extra explanation).
+
+ARTICLE 1 (keep this filename):
+{page_contents[i]}
+
+ARTICLE 2 (merge into Article 1):
+{page_contents[idx]}
+"""
+
+                merged_text = ollama_generate(prompt, model=model)
+                if "NO_MERGE_NEEDED" not in merged_text:
+                    page_paths[i].write_text(merged_text, encoding="utf-8")
+                    page_paths[idx].unlink()
+                    consumed.add(idx)
+                    merged_count += 1
+                break
+
+    if merged_count > 0:
+        print(f"Auto-consolidation complete: {merged_count} pages merged.")
+    else:
+        print("Auto-consolidation: no similar pages found.")
+
+
 def summarize_doc(filename: str, text: str, model: str) -> str:
-    prompt = f"""You are compiling a personal research wiki.
+    agents = load_agents_md()
+    prompt = f"""{agents}
+
+You are compiling a personal research wiki.
 Create a concise markdown article from this source document.
 
-Requirements:
-- Start with '# <Title>' where <Title> is a short, descriptive phrase (3-7 words) that captures the MAIN TOPIC or CONCEPT of the content — NOT the filename. Examples: "# Attention Mechanisms in Transformers", "# Notes on Stoic Philosophy", "# 2024 Q3 Budget Analysis".
+Requirements (follow strictly):
+- Start with '# <Title>' where <Title> is a short, descriptive phrase (3-7 words) that captures the MAIN TOPIC or CONCEPT — NOT the filename.
 - Include sections: Summary, Key Points, Notable Quotes, Open Questions, Related Concepts
-- Add 3-8 wiki style links in markdown form like [Concept](concept.md) when relevant.
+- Add 3-8 wiki-style links like [[Concept]] when relevant.
 - Keep it factual and grounded in the source.
 
 Source file: {filename}
@@ -701,6 +806,9 @@ def cmd_compile(args):
                     build_faiss_index(CFG)
             except Exception as e:
                 print(f"FAISS auto-index skipped: {e}")
+        # Auto-consolidation pass (only on full rebuilds or when enabled)
+        if args.force or CFG["compile"].get("consolidate_similar", True):
+            consolidate_similar_wiki_pages(args.model)
     print(f"Compile complete. Updated {compiled_now} document(s).")
     if skipped:
         print(f"\nSkipped {len(skipped)} file(s):")
@@ -782,7 +890,9 @@ def cmd_ask(args):
             context_chunks.append(f"## {p.name}\n" + read_text(p)[:CFG["ask"]["context_per_page"]])
         context = "\n\n".join(context_chunks)
 
-    prompt = f"""You are answering a question using the provided wiki pages.
+    prompt = f"""{load_agents_md()}
+
+You are answering a question using the provided wiki pages.
 Return markdown with:
 - # Answer
 - ## Direct response

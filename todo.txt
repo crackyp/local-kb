@@ -1,0 +1,1 @@
+PDF parsing via pypdf is lightweight — fine for text PDFs, potentially rough on scanned/image PDFs.

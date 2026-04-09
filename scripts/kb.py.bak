@@ -41,7 +41,7 @@ SKIP_PARTS = {"assets", ".git", "node_modules", "__pycache__"}
 _CFG_DEFAULTS = {
     "model": {"default": "fredrezones55/Qwopus3.5:9b"},
     "ollama": {"url": "http://127.0.0.1:11434", "timeout": 1800},
-    "compile": {"temperature": 0.2, "max_source_chars": 12000},
+    "compile": {"temperature": 0.2, "max_source_chars": 12000, "merge_into_existing": False, "merge_threshold": 0.7, "max_wiki_chars": 4000},
     "ask": {"temperature": 0.1, "context_per_page": 5000, "default_limit": 6},
     "ingest": {"max_content_chars": 120000},
     "faiss": {
@@ -83,6 +83,12 @@ def _load_config() -> dict:
         pass
     return cfg
 
+def load_agents_md() -> str:
+    """Load AGENTS.md and return its content as a system instruction."""
+    agents_path = Path(__file__).parent.parent / "AGENTS.md"  # points to root AGENTS.md
+    if agents_path.exists():
+        return agents_path.read_text(encoding="utf-8").strip()
+    return "# No AGENTS.md found — using default behavior"
 
 CFG = _load_config()
 
@@ -499,14 +505,87 @@ Extracted: {dt.datetime.now().isoformat()}
     print(f"PDF ingest complete. Added {added} extracted markdown file(s).")
 
 
+def find_matching_wiki_page(text: str, cfg: dict):
+    """Return (wiki_path, existing_content) if a raw doc matches an existing wiki page, else None."""
+    query = text[:500]
+    threshold = cfg["compile"]["merge_threshold"]
+
+    # Try FAISS semantic search first
+    if cfg["faiss"]["enabled"]:
+        try:
+            from faiss_index import faiss_available, search_chunks, FAISS_INDEX_FILE
+            if faiss_available() and FAISS_INDEX_FILE.exists():
+                results = search_chunks(query, cfg)
+                if results:
+                    # Sum scores per page
+                    page_scores = {}
+                    for r in results:
+                        page_scores[r["page"]] = page_scores.get(r["page"], 0) + r["score"]
+                    best_page = max(page_scores, key=page_scores.get)
+                    if page_scores[best_page] >= threshold:
+                        wiki_path = WIKI / best_page
+                        if wiki_path.exists():
+                            return (wiki_path, read_text(wiki_path))
+        except Exception as e:
+            print(f"FAISS match lookup failed, trying TF-IDF: {e}")
+
+    # TF-IDF fallback
+    pages = relevant_pages(query, limit=1)
+    if pages:
+        page_text = read_text(pages[0])
+        # Simple token overlap ratio check
+        raw_terms = set(re.findall(r"[a-zA-Z0-9]{3,}", query.lower()))
+        page_terms = set(re.findall(r"[a-zA-Z0-9]{3,}", page_text[:2000].lower()))
+        if raw_terms and page_terms:
+            overlap = len(raw_terms & page_terms) / len(raw_terms)
+            if overlap >= threshold:
+                return (pages[0], page_text)
+
+    return None
+
+
+def update_doc(filename: str, text: str, existing_wiki: str, model: str) -> str:
+    """Merge new source ONLY if relevant. Never replace the whole article."""
+    agents = load_agents_md()
+    max_wiki = CFG["compile"]["max_wiki_chars"]
+    max_source = CFG["compile"]["max_source_chars"]
+    
+    prompt = f"""{agents}
+
+You are updating an EXISTING wiki article with NEW source material.
+CRITICAL SAFETY RULES (follow exactly):
+1. FIRST decide if the new source is meaningfully relevant to this article.
+2. If it is NOT relevant (different topic, unrelated facts, etc.), respond with exactly this line and nothing else:
+   NO_MERGE_NEEDED: Source is irrelevant to this article.
+3. If it IS relevant:
+   - Merge ONLY the new information.
+   - Preserve ALL existing structure, sections, and content.
+   - NEVER delete, overwrite, or replace large parts of the existing article.
+   - Only add new facts, quotes, or sections.
+   - If something is contradicted, note it in a new "Contradictions / Updates" subsection at the bottom.
+   - Keep the same markdown format and style.
+
+EXISTING ARTICLE:
+{existing_wiki[:max_wiki]}
+
+NEW SOURCE FILE: {filename}
+NEW SOURCE:
+{text[:max_source]}
+"""
+    return ollama_generate(prompt, model=model)
+
+
 def summarize_doc(filename: str, text: str, model: str) -> str:
-    prompt = f"""You are compiling a personal research wiki.
+    agents = load_agents_md()
+    prompt = f"""{agents}
+
+You are compiling a personal research wiki.
 Create a concise markdown article from this source document.
 
-Requirements:
-- Start with '# <Title>'
+Requirements (follow strictly):
+- Start with '# <Title>' where <Title> is a short, descriptive phrase (3-7 words) that captures the MAIN TOPIC or CONCEPT — NOT the filename.
 - Include sections: Summary, Key Points, Notable Quotes, Open Questions, Related Concepts
-- Add 3-8 wiki style links in markdown form like [Concept](concept.md) when relevant.
+- Add 3-8 wiki-style links like [[Concept]] when relevant.
 - Keep it factual and grounded in the source.
 
 Source file: {filename}
@@ -586,23 +665,38 @@ def cmd_compile(args):
         if prev == digest and not args.force:
             continue
 
-        print(f"Compiling: {rel_name}")
-        article = summarize_doc(rel_name, text, model=args.model)
-        if not article.strip():
-            article = fallback_article(path, text)
-        elif not article.lstrip().startswith("#"):
-            article = f"# {path.stem}\n\n" + article.strip()
+        # Check if this new raw doc should merge into an existing wiki page
+        merge_match = None
+        if not docs_index.get(rel_name) and CFG["compile"].get("merge_into_existing", False):
+            merge_match = find_matching_wiki_page(text, CFG)
 
-        title_line = article.splitlines()[0] if article.strip() else f"# {path.stem}"
-        title = title_line.lstrip("# ").strip() or path.stem
-        out_name = slugify(title) + ".md"
-        prev_page = docs_index.get(rel_name, {}).get("wiki_page")
-        if prev_page:
-            out_path = WIKI / prev_page
+        if merge_match:
+            wiki_path, existing_content = merge_match
+            print(f"Merging: {rel_name} -> {wiki_path.name}")
+            article = update_doc(rel_name, text, existing_content, model=args.model)
+            if not article.strip():
+                article = fallback_article(path, text)
+            elif not article.lstrip().startswith("#"):
+                article = f"# {path.stem}\n\n" + article.strip()
+            out_path = wiki_path
         else:
-            out_path = WIKI / out_name
-            if out_path.exists():
-                out_path = unique_path(out_path)
+            print(f"Compiling: {rel_name}")
+            article = summarize_doc(rel_name, text, model=args.model)
+            if not article.strip():
+                article = fallback_article(path, text)
+            elif not article.lstrip().startswith("#"):
+                article = f"# {path.stem}\n\n" + article.strip()
+
+            title_line = article.splitlines()[0] if article.strip() else f"# {path.stem}"
+            title = title_line.lstrip("# ").strip() or path.stem
+            out_name = slugify(title) + ".md"
+            prev_page = docs_index.get(rel_name, {}).get("wiki_page")
+            if prev_page:
+                out_path = WIKI / prev_page
+            else:
+                out_path = WIKI / out_name
+                if out_path.exists():
+                    out_path = unique_path(out_path)
 
         source_note = f"\n\n---\nSource: `{rel_name}`\nCompiled: {dt.datetime.now().isoformat()}\n"
         out_path.write_text(article.strip() + source_note, encoding="utf-8")
@@ -709,7 +803,9 @@ def cmd_ask(args):
             context_chunks.append(f"## {p.name}\n" + read_text(p)[:CFG["ask"]["context_per_page"]])
         context = "\n\n".join(context_chunks)
 
-    prompt = f"""You are answering a research question using the provided wiki pages.
+    prompt = f"""{load_agents_md()}
+
+You are answering a question using the provided wiki pages.
 Return markdown with:
 - # Answer
 - ## Direct response
