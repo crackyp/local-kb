@@ -14,7 +14,7 @@ Flow:
 3. Ask questions and save markdown outputs to `kb/outputs/`
 4. Lint links and keep the wiki healthy
 
-You can do this either from CLI (`scripts/kb.py`) or from the Streamlit UI (`app.py`).
+You can do this either from CLI (`scripts/kb.py`) or from the Next.js web UI.
 
 ---
 
@@ -25,7 +25,7 @@ You can do this either from CLI (`scripts/kb.py`) or from the Streamlit UI (`app
 - Ollama running locally
 - One pulled model (examples: `phi4-mini`, `qwen2.5:7b`)
 - Optional for PDF support: `pypdf`
-- Optional UI: `streamlit`
+- Optional UI: Node.js 18+ (for the Next.js frontend)
 
 ---
 
@@ -77,38 +77,25 @@ python3 scripts/kb.py lint
 
 ---
 
-## UI Mode (Streamlit)
+## UI Mode (Next.js)
 
 Launch UI:
 
 ```bash
-# macOS/Linux
-python3 -m pip install --user -r requirements.txt
-python3 -m streamlit run app.py
+# Install deps
+pip install -r requirements.txt
+cd frontend && npm install && cd ..
 
-# or helper script
-./scripts/run_ui.sh
+# Start backend + frontend
+python start-ui.py
 ```
 
-```powershell
-# Windows
-py -m pip install -r requirements.txt
-py -m streamlit run app.py
-
-# or helper script
-powershell -ExecutionPolicy Bypass -File .\scripts\run_ui.ps1
+```bat
+REM Windows one-click
+start-ui.bat
 ```
 
-The UI includes tabs for:
-- Ingest Files
-- Ingest URL
-- Ingest PDF
-- Compile
-- Ask
-- Lint
-- Explorer
-
-Use the sidebar to set your default model (e.g., `phi4-mini`).
+Then open http://localhost:3000.
 
 ---
 
@@ -322,7 +309,7 @@ Use `python` instead:
 
 ```powershell
 python -m pip install -r requirements.txt
-python -m streamlit run app.py
+python start-ui.py
 ```
 
 ---

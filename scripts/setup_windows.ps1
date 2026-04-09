@@ -78,12 +78,5 @@ ollama pull $Model
 Write-Ok "Setup complete"
 Write-Host ""
 Write-Host "Next commands:" -ForegroundColor White
-if ($py -eq "py") {
-    Write-Host "  py -m streamlit run app.py" -ForegroundColor White
-    Write-Host "  py scripts/kb.py compile --model $Model" -ForegroundColor White
-    Write-Host "  py scripts/kb.py ask \"What is this project for?\" --model $Model" -ForegroundColor White
-} else {
-    Write-Host "  python -m streamlit run app.py" -ForegroundColor White
-    Write-Host "  python scripts/kb.py compile --model $Model" -ForegroundColor White
-    Write-Host "  python scripts/kb.py ask \"What is this project for?\" --model $Model" -ForegroundColor White
-}
+Write-Host "  python start-ui.py" -ForegroundColor White
+Write-Host "  Then open http://localhost:3000" -ForegroundColor White

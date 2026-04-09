@@ -13,7 +13,7 @@ You collect source material in `kb/raw/`, run a compile step with a local LLM (O
 - Compile raw docs into wiki pages (`compile`)
 - Ask questions over wiki pages and save answers (`ask`)
 - Lint wiki links and find orphans (`lint`)
-- Optional Streamlit UI (`app.py`) for click-first usage
+- Next.js web UI for click-first usage
 
 ## Repo layout
 
@@ -25,13 +25,13 @@ local-kb/
     wiki/         # compiled wiki pages
     outputs/      # Q&A/report markdown outputs
     index/        # internal incremental state and indexes
-  app.py          # Streamlit UI
+  frontend/       # Next.js web UI + FastAPI backend
   scripts/
     kb.py               # main CLI
     setup_mac.sh        # one-shot mac setup helper
     setup_windows.ps1   # one-shot Windows setup helper
-    run_ui.sh           # macOS/Linux UI launcher
-    run_ui.ps1          # Windows UI launcher
+  start-ui.py           # starts both backend and frontend
+  start-ui.bat          # Windows launcher
   requirements.txt
 ```
 
@@ -80,36 +80,27 @@ python3 scripts/kb.py ask "What are the key themes and contradictions?" --model 
 python3 scripts/kb.py lint
 ```
 
-## 3) UI mode (Streamlit)
+## 3) UI mode (Next.js)
 
 Start the app:
 
 ```bash
-# macOS/Linux
-python3 -m pip install --user -r requirements.txt
-python3 -m streamlit run app.py
+# Install Python deps
+pip install -r requirements.txt
 
-# or helper script
-./scripts/run_ui.sh
+# Install frontend deps
+cd frontend && npm install && cd ..
+
+# Start both backend and frontend
+python start-ui.py
 ```
 
-```powershell
-# Windows
-py -m pip install -r requirements.txt
-py -m streamlit run app.py
-
-# or helper script
-powershell -ExecutionPolicy Bypass -File .\scripts\run_ui.ps1
+```bat
+REM Windows one-click
+start-ui.bat
 ```
 
-UI tabs:
-- Ingest Files
-- Ingest URL
-- Ingest PDF
-- Compile
-- Ask
-- Lint
-- Explorer
+Then open http://localhost:3000.
 
 ## 4) Supported input formats
 

@@ -11,6 +11,9 @@ timeout = 240           # seconds per LLM call
 [compile]
 temperature = 0.2
 max_source_chars = 12000  # chars sent to the LLM per source doc
+merge_into_existing = false  # set true to merge new docs into matching wiki pages instead of creating new ones
+merge_threshold = 0.7        # FAISS similarity score required to trigger a merge (higher = stricter)
+max_wiki_chars = 4000        # chars of existing wiki article sent to LLM during merge
 
 [ask]
 temperature = 0.1
@@ -19,3 +22,11 @@ default_limit = 6         # number of wiki pages to include
 
 [ingest]
 max_content_chars = 120000  # URL / non-PDF content truncation limit
+
+[faiss]
+embed_model = "nomic-embed-text"
+chunk_size = 800            # characters per chunk
+chunk_overlap = 100         # overlap between consecutive chunks
+context_budget = 12000      # max total chars assembled for LLM prompt
+top_k = 20                  # max chunks to retrieve from FAISS
+enabled = true              # set false to always use TF-IDF
