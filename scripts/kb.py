@@ -41,7 +41,7 @@ SKIP_PARTS = {"assets", ".git", "node_modules", "__pycache__"}
 _CFG_DEFAULTS = {
     "model": {"default": "fredrezones55/Qwopus3.5:9b"},
     "ollama": {"url": "http://127.0.0.1:11434", "timeout": 1800},
-    "compile": {"temperature": 0.2, "max_source_chars": 55000, "merge_into_existing": False, "merge_threshold": 0.7, "max_wiki_chars": 6000},
+    "compile": {"temperature": 0.2, "max_source_chars": 55000, "merge_into_existing": False, "merge_threshold": 0.7, "max_wiki_chars": 6000, "chunking": False},
     "ask": {"temperature": 0.1, "context_per_page": 8000, "default_limit": 6},
     "ingest": {"max_content_chars": 120000},
     "faiss": {
@@ -658,7 +658,8 @@ NEW SOURCE ({filename}):
     return ollama_generate(prompt, model=model)
 
 
-def summarize_doc(filename: str, text: str, model: str) -> str:
+def _summarize_single(filename: str, text: str, model: str) -> str:
+    """Single-pass summarization (truncates if needed)."""
     prompt = f"""You are compiling a personal research wiki.
 Create a concise markdown article from this source document.
 
@@ -674,6 +675,71 @@ SOURCE:
 {truncate_at_sentence(text, CFG["compile"]["max_source_chars"])}
 """
     return ollama_generate(prompt, model=model)
+
+
+def _summarize_chunked(filename: str, text: str, model: str) -> str:
+    """Multi-pass chunked summarization for long documents."""
+    max_chars = CFG["compile"]["max_source_chars"]
+    chunks = []
+    pos = 0
+    while pos < len(text):
+        chunk = truncate_at_sentence(text[pos:], max_chars)
+        if not chunk:
+            pos += max_chars
+            continue
+        chunks.append(chunk)
+        pos += len(chunk)
+
+    print(f"  Chunking: {len(text)} chars -> {len(chunks)} chunks")
+    summaries = []
+    for i, chunk in enumerate(chunks, 1):
+        print(f"  Summarizing chunk {i}/{len(chunks)}...")
+        label = f"(part {i}/{len(chunks)})"
+        prompt = f"""You are compiling a personal research wiki.
+Extract the key facts, points, and quotes from this source document {label}.
+Return a concise bullet-point summary. Be thorough — do not omit details.
+
+Source file: {filename}
+
+SOURCE:
+{chunk}
+"""
+        summary = ollama_generate(prompt, model=model)
+        if summary.strip():
+            summaries.append(summary.strip())
+
+    if not summaries:
+        return ""
+    if len(summaries) == 1:
+        return summaries[0]
+
+    print(f"  Merging {len(summaries)} chunk summaries...")
+    combined = "\n\n---\n\n".join(f"Part {i+1}:\n{s}" for i, s in enumerate(summaries))
+    prompt = f"""You are compiling a personal research wiki.
+Below are summaries extracted from different parts of the same source document.
+Merge them into a single, coherent markdown article. Remove duplicates and organize logically.
+
+Requirements:
+- Start with '# <Title>' where <Title> is a short, descriptive phrase (3-7 words) that captures the MAIN TOPIC or CONCEPT of the content — NOT the filename.
+- Include sections: Summary, Key Points, Notable Quotes, Open Questions, Related Concepts
+- Add 3-8 wiki style links in markdown form like [Concept](concept.md) when relevant.
+- Keep it factual and grounded in the source.
+
+Source file: {filename}
+
+PART SUMMARIES:
+{truncate_at_sentence(combined, max_chars * 2)}
+"""
+    return ollama_generate(prompt, model=model)
+
+
+def summarize_doc(filename: str, text: str, model: str) -> str:
+    max_chars = CFG["compile"]["max_source_chars"]
+    use_chunking = CFG["compile"].get("chunking", False)
+
+    if use_chunking and len(text) > max_chars:
+        return _summarize_chunked(filename, text, model)
+    return _summarize_single(filename, text, model)
 
 
 def fallback_article(path: Path, text: str) -> str:
@@ -713,6 +779,8 @@ def cmd_compile(args):
         raise RuntimeError("Ollama is not running. Start it with: ollama serve")
     if getattr(args, "max_source_chars", None) is not None:
         CFG["compile"]["max_source_chars"] = args.max_source_chars
+    if getattr(args, "chunking", False):
+        CFG["compile"]["chunking"] = True
     state = load_json(STATE_FILE, {"compiled": {}})
     docs_index = load_json(DOC_INDEX_FILE, {})
 
@@ -1060,6 +1128,7 @@ def build_parser():
     p_compile.add_argument("--model", default=CFG["model"]["default"])
     p_compile.add_argument("--force", action="store_true")
     p_compile.add_argument("--max-source-chars", type=int, default=None, help="Override max chars per source doc")
+    p_compile.add_argument("--chunking", action="store_true", help="Enable chunked compilation for long documents")
     p_compile.set_defaults(func=cmd_compile)
 
     p_ask = sub.add_parser("ask", help="Answer question from wiki and write markdown output")

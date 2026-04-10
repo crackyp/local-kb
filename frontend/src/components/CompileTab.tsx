@@ -8,6 +8,7 @@ export function CompileTab() {
   const [model, setModel] = useState("");
   const [force, setForce] = useState(false);
   const [maxChars, setMaxChars] = useState(55000);
+  const [chunking, setChunking] = useState(false);
   const [idxForce, setIdxForce] = useState(false);
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [result, setResult] = useState<CommandResponse | null>(null);
@@ -27,7 +28,7 @@ export function CompileTab() {
     setCompiling(true);
     setResult(null);
     try {
-      const res = await api.compile({ model, force, max_source_chars: maxChars });
+      const res = await api.compile({ model, force, max_source_chars: maxChars, chunking });
       setResult(res);
     } catch (e) {
       setResult({ returncode: 1, output: String(e), command: "" });
@@ -76,10 +77,16 @@ export function CompileTab() {
               <option value={200000}>200K (large context)</option>
             </select>
           </div>
-          <label className="flex items-center gap-2 pt-5">
-            <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} className="rounded" />
-            <span className="text-sm">Force recompile all docs</span>
-          </label>
+          <div className="flex flex-col gap-2 pt-5">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} className="rounded" />
+              <span className="text-sm">Force recompile all docs</span>
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={chunking} onChange={(e) => setChunking(e.target.checked)} className="rounded" />
+              <span className="text-sm">Chunk long documents (slower, more complete)</span>
+            </label>
+          </div>
         </div>
         <button
           onClick={handleCompile}

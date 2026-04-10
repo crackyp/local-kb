@@ -154,6 +154,7 @@ class CompileRequest(BaseModel):
     model: str = DEFAULT_MODEL
     force: bool = False
     max_source_chars: Optional[int] = None
+    chunking: bool = False
 
 
 class AskRequest(BaseModel):
@@ -275,6 +276,8 @@ async def compile_wiki(data: CompileRequest):
         args.append("--force")
     if data.max_source_chars is not None:
         args.extend(["--max-source-chars", str(data.max_source_chars)])
+    if data.chunking:
+        args.append("--chunking")
     rc, out, cmd = run_kb(args)
     recommendations = []
     if rc == 0:

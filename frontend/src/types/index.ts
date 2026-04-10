@@ -35,6 +35,7 @@ export interface CompileRequest {
   model: string;
   force: boolean;
   max_source_chars?: number;
+  chunking?: boolean;
 }
 
 export interface AskRequest {

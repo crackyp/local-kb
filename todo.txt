@@ -1,1 +1,0 @@
-Add logic so that when new ingestions are compiled, they are added to an existing Wiki if a relevant one already exists. I think the best approach would be for the agent to check if there's an existing Wiki (need to map out that logic so that a 9b model can handle it) that it should be added to, but BEFORE adding it, it asks for comfirmation in the UI.
