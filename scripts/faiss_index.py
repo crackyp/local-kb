@@ -11,8 +11,13 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-# Re-use paths and helpers from the main CLI module.
-from kb import INDEX, WIKI, CFG, read_text, sha256_text, load_json, save_json
+import sys
+from pathlib import Path as _Path
+sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
+from local_kb.paths import INDEX, WIKI
+from local_kb.config import CFG
+from local_kb.utils import read_text, sha256_text, load_json, save_json
 
 # ---------------------------------------------------------------------------
 # Index file paths
