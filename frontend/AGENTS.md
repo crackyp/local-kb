@@ -16,4 +16,4 @@ A personal knowledge base about [YOUR TOPIC].
 - When new raw sources are added, update the relevant wiki articles
 
 ## My Interests
-[List 3-5 things you want this knowledge base to focus on]
+Work-related things, general knowledge

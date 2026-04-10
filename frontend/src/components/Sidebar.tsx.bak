@@ -28,8 +28,8 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
   return (
     <aside className="w-56 min-h-screen bg-slate-900 text-slate-100 flex flex-col">
       <div className="p-4 border-b border-slate-700">
-        <h1 className="text-lg font-bold text-white">Knowledge Based</h1>
-        <p className="text-xs text-slate-400 mt-0.5">The Knowledge Mutilator</p>
+        <h1 className="text-lg font-bold text-white">📚 Local KB</h1>
+        <p className="text-xs text-slate-400 mt-0.5">Powered by Ollama</p>
       </div>
 
       <nav className="p-2 border-b border-slate-700">

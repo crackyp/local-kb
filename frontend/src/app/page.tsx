@@ -7,7 +7,7 @@ import { IngestTab } from "@/components/IngestTab";
 import { CompileTab } from "@/components/CompileTab";
 import { AskTab } from "@/components/AskTab";
 import { ExplorerTab } from "@/components/ExplorerTab";
-import { LintTab } from "@/components/LintTab";
+import { QualityTab } from "@/components/QualityTab";
 
 export default function HomePage() {
   const [activeView, setActiveView] = useState<View>("explorer");
@@ -21,7 +21,7 @@ export default function HomePage() {
           {activeView === "compile" && <CompileTab />}
           {activeView === "ask" && <AskTab />}
           {activeView === "explorer" && <ExplorerTab />}
-          {activeView === "lint" && <LintTab />}
+          {activeView === "quality" && <QualityTab />}
         </div>
       </main>
     </div>

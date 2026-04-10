@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import type { StatusResponse } from "@/types";
+import type { StatusResponse, CommandResponse } from "@/types";
 
 export function CompileTab() {
   const [model, setModel] = useState("");
   const [force, setForce] = useState(false);
   const [idxForce, setIdxForce] = useState(false);
   const [status, setStatus] = useState<StatusResponse | null>(null);
-  const [result, setResult] = useState<{ returncode: number; output: string } | null>(null);
+  const [result, setResult] = useState<CommandResponse | null>(null);
   const [compiling, setCompiling] = useState(false);
   const [indexing, setIndexing] = useState(false);
 
@@ -29,7 +29,7 @@ export function CompileTab() {
       const res = await api.compile({ model, force });
       setResult(res);
     } catch (e) {
-      setResult({ returncode: 1, output: String(e) });
+      setResult({ returncode: 1, output: String(e), command: "" });
     } finally {
       setCompiling(false);
     }
@@ -42,7 +42,7 @@ export function CompileTab() {
       const res = await api.buildIndex({ force: idxForce });
       setResult(res);
     } catch (e) {
-      setResult({ returncode: 1, output: String(e) });
+      setResult({ returncode: 1, output: String(e), command: "" });
     } finally {
       setIndexing(false);
     }
@@ -106,6 +106,25 @@ export function CompileTab() {
             )}
           </div>
           <pre className="text-xs text-slate-300 overflow-auto max-h-64">{result.output}</pre>
+        </div>
+      )}
+
+      {result?.recommendations && result.recommendations.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {result.recommendations.map((rec, i) => (
+            <div key={i} className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+              <span className="text-sm text-amber-800">{rec.message}</span>
+              {rec.action === "rebuild_index" && (
+                <button
+                  onClick={handleBuildIndex}
+                  disabled={indexing}
+                  className="px-2 py-1 bg-amber-200 text-amber-900 rounded text-xs font-medium hover:bg-amber-300"
+                >
+                  Rebuild
+                </button>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>

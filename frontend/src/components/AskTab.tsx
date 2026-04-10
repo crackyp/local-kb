@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { api } from "@/lib/api";
-import type { StatusResponse, QaHistoryEntry, AskResponse } from "@/types";
+import type { StatusResponse, QaHistoryEntry, AskResponse, Recommendation } from "@/types";
 
 export function AskTab() {
   const [question, setQuestion] = useState("");
@@ -14,6 +14,7 @@ export function AskTab() {
   const [result, setResult] = useState<AskResponse | null>(null);
   const [history, setHistory] = useState<QaHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const [promoted, setPromoted] = useState<string | null>(null);
 
   useEffect(() => {
     api.getStatus().then(setStatus).catch(console.error);
@@ -25,11 +26,23 @@ export function AskTab() {
     }
   }, [status, model]);
 
+  const handlePromote = async (filename: string) => {
+    try {
+      const res = await api.promote(filename);
+      if (res.returncode === 0) {
+        setPromoted(filename);
+      }
+    } catch (e) {
+      console.error("Promote failed:", e);
+    }
+  };
+
   const handleAsk = async () => {
     if (!question.trim()) return;
     if (!model) return;
     setLoading(true);
     setResult(null);
+    setPromoted(null);
     try {
       const res = await api.ask({ question: question.trim(), model, limit, use_faiss: useFaiss });
       setResult(res);
@@ -70,7 +83,11 @@ export function AskTab() {
           </div>
           <div>
             <label className="text-xs text-slate-500">Page limit (TF-IDF)</label>
-            <input type="number" min={1} max={30} value={limit} onChange={(e) => setLimit(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 border rounded-lg text-sm" />
+            <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 border rounded-lg text-sm bg-white">
+              {[3, 6, 10, 15, 25].map((n) => (
+                <option key={n} value={n}>{n} pages</option>
+              ))}
+            </select>
           </div>
           <label className="flex items-center gap-2 pt-5">
             <input type="checkbox" checked={useFaiss} onChange={(e) => setUseFaiss(e.target.checked)} className="rounded" />
@@ -93,21 +110,40 @@ export function AskTab() {
           <div className="prose prose-slate prose-sm max-w-none bg-slate-50 rounded-lg p-4">
             <ReactMarkdown>{result.answer}</ReactMarkdown>
           </div>
-          {result.written_file && (
-            <button
-              onClick={() => {
-                const blob = new Blob([result.answer], { type: "text/markdown" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = result.written_file!;
-                a.click();
-              }}
-              className="mt-4 px-3 py-1.5 bg-slate-100 text-slate-700 rounded text-xs font-medium hover:bg-slate-200"
-            >
-              Download {result.written_file}
-            </button>
-          )}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {result.written_file && (
+              <button
+                onClick={() => {
+                  const blob = new Blob([result.answer], { type: "text/markdown" });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  a.href = url;
+                  a.download = result.written_file!;
+                  a.click();
+                }}
+                className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded text-xs font-medium hover:bg-slate-200"
+              >
+                Download {result.written_file}
+              </button>
+            )}
+            {result.recommendations?.map((rec, i) =>
+              rec.action === "promote" && rec.payload?.filename ? (
+                promoted === rec.payload.filename ? (
+                  <span key={i} className="px-3 py-1.5 bg-green-50 text-green-700 rounded text-xs font-medium">
+                    Saved to KB
+                  </span>
+                ) : (
+                  <button
+                    key={i}
+                    onClick={() => handlePromote(rec.payload!.filename)}
+                    className="px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded text-xs font-medium hover:bg-amber-100"
+                  >
+                    {rec.message}
+                  </button>
+                )
+              ) : null
+            )}
+          </div>
         </div>
       )}
 

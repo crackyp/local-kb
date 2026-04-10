@@ -41,8 +41,8 @@ SKIP_PARTS = {"assets", ".git", "node_modules", "__pycache__"}
 _CFG_DEFAULTS = {
     "model": {"default": "fredrezones55/Qwopus3.5:9b"},
     "ollama": {"url": "http://127.0.0.1:11434", "timeout": 1800},
-    "compile": {"temperature": 0.2, "max_source_chars": 12000, "merge_into_existing": False, "merge_threshold": 0.7, "max_wiki_chars": 4000},
-    "ask": {"temperature": 0.1, "context_per_page": 5000, "default_limit": 6},
+    "compile": {"temperature": 0.2, "max_source_chars": 55000, "merge_into_existing": False, "merge_threshold": 0.7, "max_wiki_chars": 6000},
+    "ask": {"temperature": 0.1, "context_per_page": 8000, "default_limit": 6},
     "ingest": {"max_content_chars": 120000},
     "faiss": {
         "embed_model": "nomic-embed-text",
@@ -83,12 +83,6 @@ def _load_config() -> dict:
         pass
     return cfg
 
-def load_agents_md() -> str:
-    """Load AGENTS.md and return its content as a system instruction."""
-    agents_path = Path(__file__).parent.parent / "AGENTS.md"  # points to root AGENTS.md
-    if agents_path.exists():
-        return agents_path.read_text(encoding="utf-8").strip()
-    return "# No AGENTS.md found — using default behavior"
 
 CFG = _load_config()
 
@@ -161,6 +155,23 @@ def resolve_input_patterns(patterns):
         seen.add(k)
         uniq.append(p)
     return uniq
+
+
+def truncate_at_sentence(text: str, max_chars: int) -> str:
+    """Truncate text to max_chars, cutting at the last sentence boundary."""
+    if len(text) <= max_chars:
+        return text
+    chunk = text[:max_chars]
+    # Find the last sentence-ending punctuation or newline
+    for sep in ("\n\n", ".\n", ". ", ".\t"):
+        pos = chunk.rfind(sep)
+        if pos > max_chars // 2:
+            return chunk[: pos + len(sep)].rstrip()
+    # Fallback: cut at last newline
+    pos = chunk.rfind("\n")
+    if pos > max_chars // 2:
+        return chunk[:pos].rstrip()
+    return chunk.rstrip()
 
 
 def should_compile_file(path: Path) -> bool:
@@ -319,6 +330,34 @@ def download_image(url: str, out_dir: Path, idx: int, timeout: int = 30):
     return out_path.name
 
 
+def _ocr_pdf(pdf_path: Path, max_pages: int | None = None) -> str:
+    """Extract text from a scanned/image PDF using OCR (easyocr + pymupdf)."""
+    try:
+        import fitz  # type: ignore
+        import easyocr  # type: ignore
+        import numpy as np  # type: ignore
+    except ImportError:
+        return ""
+
+    doc = fitz.open(str(pdf_path))
+    pages = list(range(len(doc)))
+    if max_pages is not None and max_pages > 0:
+        pages = pages[:max_pages]
+
+    reader = easyocr.Reader(["en"], gpu=False, verbose=False)
+    chunks = []
+    for i in pages:
+        page = doc[i]
+        pix = page.get_pixmap(dpi=200)
+        img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)
+        results = reader.readtext(img, detail=0)
+        txt = " ".join(results).strip()
+        if txt:
+            chunks.append(f"\n\n## Page {i + 1}\n\n{txt}")
+    doc.close()
+    return "".join(chunks).strip()
+
+
 def extract_pdf_text(pdf_path: Path, max_pages: int | None = None) -> str:
     try:
         from pypdf import PdfReader  # type: ignore
@@ -342,7 +381,18 @@ def extract_pdf_text(pdf_path: Path, max_pages: int | None = None) -> str:
         if txt:
             chunks.append(f"\n\n## Page {i}\n\n{txt}")
 
-    return "".join(chunks).strip()
+    text = "".join(chunks).strip()
+
+    # Fallback to OCR for scanned/image PDFs
+    if not text:
+        print(f"  No text layer found, trying OCR on {pdf_path.name}...")
+        text = _ocr_pdf(pdf_path, max_pages)
+        if text:
+            print(f"  OCR extracted {len(text)} chars.")
+        else:
+            print(f"  OCR failed or no text found in {pdf_path.name}.")
+
+    return text
 
 
 def extract_docx_text(docx_path: Path) -> str:
@@ -358,23 +408,67 @@ def extract_docx_text(docx_path: Path) -> str:
     return "\n\n".join(paragraphs)
 
 
-def build_wiki_index():
-    index = {}
-    for path in sorted(WIKI.glob("*.md")):
-        text = read_text(path)
-        links = extract_links(text)
-        first = ""
-        for ln in text.splitlines():
-            if ln.strip():
-                first = ln.strip()
-                break
-        title = first.lstrip("# ").strip() if first else path.stem
-        index[path.name] = {
-            "title": title,
-            "links_to": [l[1] for l in links],
-            "words": len(text.split()),
-        }
+def _index_wiki_page(path: Path) -> dict:
+    """Extract index metadata for a single wiki page."""
+    text = read_text(path)
+    links = extract_links(text)
+    first = ""
+    for ln in text.splitlines():
+        if ln.strip():
+            first = ln.strip()
+            break
+    title = first.lstrip("# ").strip() if first else path.stem
+    return {
+        "title": title,
+        "links_to": [l[1] for l in links],
+        "words": len(text.split()),
+    }
+
+
+def _write_index_md(index: dict):
+    """Write wiki/INDEX.md from the index dict."""
+    if not index:
+        idx_path = WIKI / "INDEX.md"
+        if idx_path.exists():
+            idx_path.unlink()
+        return
+    lines = ["# Wiki Index", f"\n{len(index)} topics\n"]
+    for fname in sorted(index):
+        title = index[fname]["title"]
+        lines.append(f"- [[{fname}]] — {title}")
+    (WIKI / "INDEX.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def build_wiki_index(changed_pages: set | None = None):
+    """Build or incrementally update the wiki index.
+
+    If *changed_pages* is provided (set of wiki filenames), only those pages
+    are re-read.  Pages in the index that no longer exist on disk are pruned.
+    If *changed_pages* is None, a full rebuild is performed.
+    """
+    index = load_json(WIKI_INDEX_FILE, {}) if changed_pages is not None else {}
+
+    if changed_pages is None:
+        # Full rebuild
+        for path in sorted(WIKI.glob("*.md")):
+            if path.name == "INDEX.md":
+                continue
+            index[path.name] = _index_wiki_page(path)
+    else:
+        # Incremental: update only changed pages
+        for page_name in changed_pages:
+            path = WIKI / page_name
+            if path.exists():
+                index[page_name] = _index_wiki_page(path)
+
+        # Prune deleted pages
+        existing = {p.name for p in WIKI.glob("*.md") if p.name != "INDEX.md"}
+        for stale in list(index):
+            if stale not in existing:
+                del index[stale]
+
     save_json(WIKI_INDEX_FILE, index)
+    _write_index_md(index)
     return index
 
 
@@ -545,137 +639,39 @@ def find_matching_wiki_page(text: str, cfg: dict):
 
 
 def update_doc(filename: str, text: str, existing_wiki: str, model: str) -> str:
-    """Merge new source ONLY if relevant. Never replace the whole article."""
-    agents = load_agents_md()
+    """Merge new source material into an existing wiki article."""
     max_wiki = CFG["compile"]["max_wiki_chars"]
     max_source = CFG["compile"]["max_source_chars"]
-    
-    prompt = f"""{agents}
 
-You are updating an EXISTING wiki article with NEW source material.
-CRITICAL SAFETY RULES (follow exactly):
-1. FIRST decide if the new source is meaningfully relevant to this article.
-2. If it is NOT relevant (different topic, unrelated facts, etc.), respond with exactly this line and nothing else:
-   NO_MERGE_NEEDED: Source is irrelevant to this article.
-3. If it IS relevant:
-   - Merge ONLY the new information.
-   - Preserve ALL existing structure, sections, and content.
-   - NEVER delete, overwrite, or replace large parts of the existing article.
-   - Only add new facts, quotes, or sections.
-   - If something is contradicted, note it in a new "Contradictions / Updates" subsection at the bottom.
-   - Keep the same markdown format and style.
+    prompt = f"""You are updating a personal research wiki article with new source material.
+Merge the new information into the existing article. Preserve the existing structure and content.
+Add new facts, quotes, and points. Do not remove existing content unless it's contradicted.
+Keep the same markdown format with: Summary, Key Points, Notable Quotes, Open Questions, Related Concepts.
+Add 3-8 wiki style links in markdown form like [Concept](concept.md) when relevant.
 
 EXISTING ARTICLE:
-{existing_wiki[:max_wiki]}
+{truncate_at_sentence(existing_wiki, max_wiki)}
 
-NEW SOURCE FILE: {filename}
-NEW SOURCE:
-{text[:max_source]}
+NEW SOURCE ({filename}):
+{truncate_at_sentence(text, max_source)}
 """
     return ollama_generate(prompt, model=model)
 
 
-def consolidate_similar_wiki_pages(model: str):
-    """Auto-merge highly similar wiki pages after a full compile."""
-    if not CFG["compile"].get("consolidate_similar", True):
-        return
-
-    wiki_dir = Path(__file__).parent.parent / "kb" / "wiki"
-    wiki_files = list(wiki_dir.glob("*.md"))
-    if len(wiki_files) < 2:
-        return
-
-    print(f"Running auto-consolidation on {len(wiki_files)} wiki pages...")
-
-    embed_model = CFG["faiss"]["embed_model"]
-
-    embeddings = []
-    page_contents = []
-    page_paths = []
-
-    for f in wiki_files:
-        text = f.read_text(encoding="utf-8")
-        short = text[:1000].strip()
-        payload = json.dumps({"model": embed_model, "prompt": short}).encode("utf-8")
-        req = urllib.request.Request(
-            CFG["ollama"]["url"] + "/api/embeddings",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            response = json.loads(resp.read().decode("utf-8"))
-        embeddings.append(response["embedding"])
-        page_contents.append(text)
-        page_paths.append(f)
-
-    import numpy as np
-    import faiss
-    embeddings_np = np.array(embeddings).astype("float32")
-    dimension = len(embeddings[0])
-    index = faiss.IndexFlatIP(dimension)
-    index.add(embeddings_np)
-
-    threshold = CFG["compile"].get("consolidation_threshold", 0.92)
-    merged_count = 0
-    consumed = set()
-
-    for i in range(len(wiki_files)):
-        if i in consumed:
-            continue
-        D, I = index.search(embeddings_np[i:i+1], 5)
-        for dist, idx in zip(D[0][1:], I[0][1:]):
-            if dist >= threshold and idx > i and idx not in consumed:
-                print(f"  Merging similar pages: {page_paths[i].name} + {page_paths[idx].name}")
-
-                prompt = f"""You are consolidating two highly similar wiki articles into ONE.
-CRITICAL RULES:
-- Merge ALL content from both into the FIRST article.
-- Preserve the original structure, sections, and markdown style of the first article.
-- Add new facts, quotes, and insights from the second article.
-- If there are contradictions, add a "Contradictions / Updates" section at the bottom.
-- Never delete or overwrite large existing sections unless they are fully superseded.
-- Keep the filename of the first article.
-- Output ONLY the full merged markdown (no extra explanation).
-
-ARTICLE 1 (keep this filename):
-{page_contents[i]}
-
-ARTICLE 2 (merge into Article 1):
-{page_contents[idx]}
-"""
-
-                merged_text = ollama_generate(prompt, model=model)
-                if "NO_MERGE_NEEDED" not in merged_text:
-                    page_paths[i].write_text(merged_text, encoding="utf-8")
-                    page_paths[idx].unlink()
-                    consumed.add(idx)
-                    merged_count += 1
-                break
-
-    if merged_count > 0:
-        print(f"Auto-consolidation complete: {merged_count} pages merged.")
-    else:
-        print("Auto-consolidation: no similar pages found.")
-
-
 def summarize_doc(filename: str, text: str, model: str) -> str:
-    agents = load_agents_md()
-    prompt = f"""{agents}
-
-You are compiling a personal research wiki.
+    prompt = f"""You are compiling a personal research wiki.
 Create a concise markdown article from this source document.
 
-Requirements (follow strictly):
-- Start with '# <Title>' where <Title> is a short, descriptive phrase (3-7 words) that captures the MAIN TOPIC or CONCEPT — NOT the filename.
+Requirements:
+- Start with '# <Title>' where <Title> is a short, descriptive phrase (3-7 words) that captures the MAIN TOPIC or CONCEPT of the content — NOT the filename. Examples: "# Attention Mechanisms in Transformers", "# Notes on Stoic Philosophy", "# 2024 Q3 Budget Analysis".
 - Include sections: Summary, Key Points, Notable Quotes, Open Questions, Related Concepts
-- Add 3-8 wiki-style links like [[Concept]] when relevant.
+- Add 3-8 wiki style links in markdown form like [Concept](concept.md) when relevant.
 - Keep it factual and grounded in the source.
 
 Source file: {filename}
 
 SOURCE:
-{text[:CFG["compile"]["max_source_chars"]]}
+{truncate_at_sentence(text, CFG["compile"]["max_source_chars"])}
 """
     return ollama_generate(prompt, model=model)
 
@@ -720,6 +716,7 @@ def cmd_compile(args):
 
     raw_files = sorted([p for p in RAW.glob("**/*") if should_compile_file(p)])
     compiled_now = 0
+    changed_wiki_pages: set = set()
     skipped = []
 
     for path in raw_files:
@@ -779,7 +776,12 @@ def cmd_compile(args):
                 out_path = WIKI / prev_page
             else:
                 out_path = WIKI / out_name
-                if out_path.exists():
+                # Check both filesystem and docs_index for collisions
+                claimed_pages = {
+                    v["wiki_page"] for k, v in docs_index.items()
+                    if isinstance(v, dict) and "wiki_page" in v and k != rel_name
+                }
+                if out_path.exists() or out_name in claimed_pages:
                     out_path = unique_path(out_path)
 
         source_note = f"\n\n---\nSource: `{rel_name}`\nCompiled: {dt.datetime.now().isoformat()}\n"
@@ -791,24 +793,22 @@ def cmd_compile(args):
             "sha256": digest,
             "updated_at": dt.datetime.now().isoformat(),
         }
+        changed_wiki_pages.add(out_path.name)
         compiled_now += 1
 
     save_json(STATE_FILE, state)
     save_json(DOC_INDEX_FILE, docs_index)
     if compiled_now > 0:
-        build_wiki_index()
+        build_wiki_index(None if args.force else changed_wiki_pages)
         # Auto-rebuild FAISS index if enabled
         if CFG["faiss"]["enabled"]:
             try:
                 from faiss_index import faiss_available, build_faiss_index
                 if faiss_available():
-                    print("Rebuilding FAISS index...")
+                    print("Updating FAISS index...")
                     build_faiss_index(CFG)
             except Exception as e:
                 print(f"FAISS auto-index skipped: {e}")
-        # Auto-consolidation pass (only on full rebuilds or when enabled)
-        if args.force or CFG["compile"].get("consolidate_similar", True):
-            consolidate_similar_wiki_pages(args.model)
     print(f"Compile complete. Updated {compiled_now} document(s).")
     if skipped:
         print(f"\nSkipped {len(skipped)} file(s):")
@@ -887,12 +887,10 @@ def cmd_ask(args):
             return
         context_chunks = []
         for p in pages:
-            context_chunks.append(f"## {p.name}\n" + read_text(p)[:CFG["ask"]["context_per_page"]])
+            context_chunks.append(f"## {p.name}\n" + truncate_at_sentence(read_text(p), CFG["ask"]["context_per_page"]))
         context = "\n\n".join(context_chunks)
 
-    prompt = f"""{load_agents_md()}
-
-You are answering a question using the provided wiki pages.
+    prompt = f"""You are answering a question using the provided wiki pages.
 Return markdown with:
 - # Answer
 - ## Direct response
@@ -961,6 +959,79 @@ def cmd_lint(_args):
         print(f"  - {o}")
 
 
+def cmd_promote(args):
+    ensure_dirs()
+    src = OUTPUTS / args.filename
+    if not src.exists():
+        print(f"File not found: {src}")
+        sys.exit(1)
+    dst_name = f"promoted-{args.filename}"
+    dst = RAW / dst_name
+    if dst.exists():
+        dst = unique_path(dst)
+    shutil.copy2(src, dst)
+    print(f"Promoted: {src.name} -> raw/{dst.name}")
+
+
+def cmd_health_check(args):
+    ensure_dirs()
+    if not ping_ollama():
+        raise RuntimeError("Ollama is not running. Start it with: ollama serve")
+
+    pages = sorted(WIKI.glob("*.md"))
+    pages = [p for p in pages if p.name != "INDEX.md"]
+    if not pages:
+        print("No wiki pages found. Run compile first.")
+        return
+
+    # Build condensed wiki summary for the LLM
+    summaries = []
+    for p in pages:
+        text = read_text(p)
+        links = extract_links(text)
+        lines = text.splitlines()
+        # Title + first paragraph (up to 500 chars)
+        first_para = ""
+        for ln in lines:
+            if ln.strip():
+                first_para += ln.strip() + " "
+                if len(first_para) > 500:
+                    break
+        link_names = [l[1] for l in links]
+        summaries.append(
+            f"## {p.name}\n{first_para.strip()}\nLinks to: {', '.join(link_names) if link_names else 'none'}"
+        )
+
+    wiki_summary = "\n\n".join(summaries)
+    # Truncate if massive
+    max_chars = CFG["compile"].get("max_source_chars", 12000) * 2
+    if len(wiki_summary) > max_chars:
+        wiki_summary = wiki_summary[:max_chars] + "\n\n[...truncated...]"
+
+    prompt = f"""You are reviewing a personal knowledge base wiki for quality.
+The wiki has {len(pages)} pages. Here is a summary of each page:
+
+{wiki_summary}
+
+Produce a health-check report in markdown with these sections:
+- # Wiki Health Check
+- ## Contradictions (statements in one article that conflict with another)
+- ## Unexplained Topics (topics mentioned or linked but never have their own article)
+- ## Unsourced Claims (assertions that appear to lack supporting evidence or source references)
+- ## Suggested New Articles (3-5 new articles that would fill gaps in the wiki)
+
+Be specific. Reference page filenames. If a section has no issues, say "None found."
+"""
+    print(f"Reviewing {len(pages)} wiki pages...")
+    report = ollama_generate(prompt, model=args.model, temperature=CFG["ask"]["temperature"])
+
+    ts = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    out_path = OUTPUTS / f"health-check-{ts}.md"
+    out_path.write_text(report + "\n", encoding="utf-8")
+    print(report)
+    print(f"\nWrote: {out_path}")
+
+
 def build_parser():
     p = argparse.ArgumentParser(description="Local KB CLI")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -1002,6 +1073,14 @@ def build_parser():
 
     p_lint = sub.add_parser("lint", help="Check link integrity/orphans in wiki")
     p_lint.set_defaults(func=cmd_lint)
+
+    p_promote = sub.add_parser("promote", help="Copy an output file into raw/ for recompilation")
+    p_promote.add_argument("filename", help="Filename in kb/outputs/ to promote")
+    p_promote.set_defaults(func=cmd_promote)
+
+    p_health = sub.add_parser("health-check", help="LLM-powered wiki quality review")
+    p_health.add_argument("--model", default=CFG["model"]["default"])
+    p_health.set_defaults(func=cmd_health_check)
 
     return p
 

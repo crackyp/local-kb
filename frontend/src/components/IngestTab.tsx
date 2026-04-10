@@ -16,6 +16,8 @@ export function IngestTab() {
 
   // Files state
   const [paths, setPaths] = useState("");
+  const [uploadFiles, setUploadFiles] = useState<File[]>([]);
+  const [dragging, setDragging] = useState(false);
 
   // URL state
   const [urls, setUrls] = useState("");
@@ -30,6 +32,48 @@ export function IngestTab() {
 
   const [result, setResult] = useState<{ returncode: number; output: string } | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const addFiles = (files: File[]) => {
+    setUploadFiles((prev) => {
+      const existing = new Set(prev.map((f) => f.name + f.size));
+      const unique = files.filter((f) => !existing.has(f.name + f.size));
+      return [...prev, ...unique];
+    });
+  };
+
+  const removeFile = (index: number) => {
+    setUploadFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUploadFiles = async () => {
+    if (!uploadFiles.length) return;
+    setLoading(true);
+    setResult(null);
+    try {
+      const res = await api.ingestUpload(uploadFiles);
+      setResult({ returncode: 0, output: `Uploaded ${res.count} file(s):\n${res.saved.map((s) => `  ${s.name} (${(s.size / 1024).toFixed(1)} KB)`).join("\n")}` });
+      setUploadFiles([]);
+    } catch (e) {
+      setResult({ returncode: 1, output: String(e) });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length) {
+      addFiles(files);
+    } else {
+      // Network shares / UNC paths come through as text, not files
+      const text = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text");
+      if (text?.trim()) {
+        setPaths((prev) => (prev ? prev + "\n" + text.trim() : text.trim()));
+      }
+    }
+  };
 
   const handleIngestPath = async () => {
     const lines = paths.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -100,20 +144,68 @@ export function IngestTab() {
         <div className="p-6">
           {mode === "files" && (
             <div className="space-y-5">
-              <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors">
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                  dragging ? "border-blue-500 bg-blue-50" : "border-slate-300 hover:border-blue-400"
+                }`}
+              >
                 <div className="text-4xl mb-3">📁</div>
                 <div className="text-base font-medium text-slate-700 mb-1">Drop files here or click to upload</div>
                 <div className="text-sm text-slate-500">Supports any file type</div>
-                <input type="file" multiple className="hidden" id="file-upload" />
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
+                  id="file-upload"
+                  onChange={(e) => {
+                    addFiles(Array.from(e.target.files || []));
+                    e.target.value = "";
+                  }}
+                />
                 <label htmlFor="file-upload" className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 cursor-pointer">
                   Choose Files
                 </label>
               </div>
+              {uploadFiles.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium text-slate-700">Selected ({uploadFiles.length})</div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto">
+                    {uploadFiles.map((f, i) => (
+                      <div key={f.name + i} className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-2 py-1.5 rounded">
+                        <span>{f.name} ({(f.size / 1024).toFixed(1)} KB)</span>
+                        <button
+                          onClick={() => removeFile(i)}
+                          className="text-red-500 hover:text-red-700 px-1.5 py-0.5 rounded hover:bg-red-50"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleUploadFiles}
+                    disabled={loading}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? "Uploading..." : `Upload ${uploadFiles.length} file(s)`}
+                  </button>
+                </div>
+              )}
               <div>
                 <label className="text-sm font-medium text-slate-700">Or ingest by path / glob</label>
                 <textarea
                   value={paths}
                   onChange={(e) => setPaths(e.target.value)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    const text = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text");
+                    if (text?.trim()) {
+                      setPaths((prev) => (prev ? prev + "\n" + text.trim() : text.trim()));
+                    }
+                  }}
                   placeholder="/Users/you/Research/*.md&#10;/Users/you/Research/*.txt"
                   className="mt-2 w-full h-28 px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />

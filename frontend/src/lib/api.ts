@@ -4,12 +4,14 @@ import type {
   StatusResponse,
   CommandResponse,
   AskResponse,
+  HealthCheckResponse,
   FilesResponse,
   FileContentResponse,
   IngestUrlRequest,
   CompileRequest,
   AskRequest,
   IndexRequest,
+  HealthCheckRequest,
 } from "@/types";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -79,6 +81,20 @@ export const api = {
     }),
 
   lint: () => request<CommandResponse>("/api/lint", { method: "POST" }),
+
+  promote: (filename: string) =>
+    request<CommandResponse>("/api/promote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename }),
+    }),
+
+  healthCheck: (data: HealthCheckRequest) =>
+    request<HealthCheckResponse>("/api/health-check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }),
 
   listFiles: (category: "raw" | "wiki" | "outputs") =>
     request<FilesResponse>(`/api/files/${category}`),

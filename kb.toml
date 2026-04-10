@@ -2,24 +2,22 @@
 # Edit these values to customise behaviour. Delete any line to use its default.
 
 [model]
-default = "phi4-mini"
+default = "Fredrezones55/qwopus3.5:9b"
 
 [ollama]
 url = "http://127.0.0.1:11434"
-timeout = 240           # seconds per LLM call
+timeout = 480           # seconds per LLM call
 
 [compile]
 temperature = 0.2
-max_source_chars = 12000  # chars sent to the LLM per source doc
-merge_into_existing = true
-merge_threshold = 0.0        # ← was 0.7; 0.85–0.9 is much safer on your 9B model
-consolidate_similar = true
-consolidation_threshold = 0.95    # ← new (0.90–0.95 is the safe range)
-max_wiki_chars = 6000         # bump this a bit so more of the existing page is visible to the model
+max_source_chars = 55000  # chars sent to the LLM per source doc
+merge_into_existing = false  # set true to merge new docs into matching wiki pages instead of creating new ones
+merge_threshold = 0.7        # FAISS similarity score required to trigger a merge (higher = stricter)
+max_wiki_chars = 6000        # chars of existing wiki article sent to LLM during merge
 
 [ask]
 temperature = 0.1
-context_per_page = 5000   # chars loaded per wiki page
+context_per_page = 8000   # chars loaded per wiki page
 default_limit = 6         # number of wiki pages to include
 
 [ingest]
@@ -29,6 +27,6 @@ max_content_chars = 120000  # URL / non-PDF content truncation limit
 embed_model = "nomic-embed-text"
 chunk_size = 800            # characters per chunk
 chunk_overlap = 100         # overlap between consecutive chunks
-context_budget = 12000      # max total chars assembled for LLM prompt
+context_budget = 20000      # max total chars assembled for LLM prompt
 top_k = 20                  # max chunks to retrieve from FAISS
 enabled = true              # set false to always use TF-IDF

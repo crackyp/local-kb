@@ -167,6 +167,14 @@ class IndexRequest(BaseModel):
     model: Optional[str] = None
 
 
+class PromoteRequest(BaseModel):
+    filename: str
+
+
+class HealthCheckRequest(BaseModel):
+    model: str = DEFAULT_MODEL
+
+
 @app.on_event("startup")
 async def startup():
     ensure_dirs()
@@ -265,7 +273,18 @@ async def compile_wiki(data: CompileRequest):
     if data.force:
         args.append("--force")
     rc, out, cmd = run_kb(args)
-    return {"returncode": rc, "output": out, "command": cmd}
+    recommendations = []
+    if rc == 0:
+        if "Compiling:" in out or "Merging:" in out:
+            recommendations.append({
+                "message": "Wiki updated. FAISS index may be stale — rebuild?",
+                "action": "rebuild_index",
+            })
+        else:
+            recommendations.append({
+                "message": "All sources up to date. Add new raw files to grow the wiki.",
+            })
+    return {"returncode": rc, "output": out, "command": cmd, "recommendations": recommendations}
 
 
 @app.post("/api/index")
@@ -276,7 +295,10 @@ async def build_index(data: IndexRequest):
     if data.model:
         args.extend(["--model", data.model])
     rc, out, cmd = run_kb(args)
-    return {"returncode": rc, "output": out, "command": cmd}
+    recommendations = []
+    if rc == 0:
+        recommendations.append({"message": "Index ready. Try asking a question.", "action": "go_ask"})
+    return {"returncode": rc, "output": out, "command": cmd, "recommendations": recommendations}
 
 
 @app.post("/api/ask")
@@ -292,13 +314,50 @@ async def ask_wiki(data: AskRequest):
     if written and written.exists():
         answer = written.read_text(encoding="utf-8", errors="ignore")
 
-    return {"returncode": rc, "output": out, "command": cmd, "answer": answer, "written_file": written.name if written else None}
+    recommendations = []
+    if rc == 0 and written:
+        recommendations.append({
+            "message": "Save this answer to the knowledge base?",
+            "action": "promote",
+            "payload": {"filename": written.name},
+        })
+    return {"returncode": rc, "output": out, "command": cmd, "answer": answer, "written_file": written.name if written else None, "recommendations": recommendations}
 
 
 @app.post("/api/lint")
 async def lint_wiki():
     rc, out, cmd = run_kb(["lint"])
+    recommendations = []
+    if rc == 0 and "Broken links:" in out:
+        for line in out.splitlines():
+            if line.startswith("Broken links:"):
+                count = line.split(":")[1].strip()
+                if count != "0":
+                    recommendations.append({"message": f"{count} broken links found. Recompile to fix.", "action": "compile"})
+            if line.startswith("Orphan pages"):
+                count = line.split(":")[1].strip()
+                if count != "0":
+                    recommendations.append({"message": f"{count} orphan pages with no incoming links."})
+    return {"returncode": rc, "output": out, "command": cmd, "recommendations": recommendations}
+
+
+@app.post("/api/promote")
+async def promote_output(data: PromoteRequest):
+    rc, out, cmd = run_kb(["promote", data.filename])
     return {"returncode": rc, "output": out, "command": cmd}
+
+
+@app.post("/api/health-check")
+async def health_check(data: HealthCheckRequest):
+    rc, out, cmd = run_kb(["health-check", "--model", data.model])
+    written = parse_written_path(out) if rc == 0 else None
+    report = ""
+    if written and written.exists():
+        report = written.read_text(encoding="utf-8", errors="ignore")
+    recommendations = []
+    if rc == 0:
+        recommendations.append({"message": "Review complete. Check the report for actionable items."})
+    return {"returncode": rc, "output": out, "command": cmd, "report": report, "recommendations": recommendations}
 
 
 @app.get("/api/files/{category}")

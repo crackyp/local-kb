@@ -1,4 +1,4 @@
-export type View = "ingest" | "compile" | "ask" | "explorer" | "lint";
+export type View = "ingest" | "compile" | "ask" | "explorer" | "quality";
 
 export interface FileMeta {
   name: string;
@@ -48,15 +48,30 @@ export interface IndexRequest {
   model?: string;
 }
 
+export interface Recommendation {
+  message: string;
+  action?: string;
+  payload?: Record<string, any>;
+}
+
 export interface CommandResponse {
   returncode: number;
   output: string;
   command: string;
+  recommendations?: Recommendation[];
 }
 
 export interface AskResponse extends CommandResponse {
   answer: string;
   written_file: string | null;
+}
+
+export interface HealthCheckResponse extends CommandResponse {
+  report: string;
+}
+
+export interface HealthCheckRequest {
+  model: string;
 }
 
 export interface FilesResponse {

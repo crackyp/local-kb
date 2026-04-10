@@ -176,37 +176,15 @@ def _wiki_page_hashes() -> dict:
     return hashes
 
 
-def build_faiss_index(cfg: dict, force: bool = False) -> dict:
-    """Build (or rebuild) the FAISS index from wiki pages.
-
-    Returns ``{"pages": int, "chunks": int, "dimensions": int}``.
-    """
+def _full_build(cfg: dict, current_hashes: dict) -> dict:
+    """Full rebuild of the FAISS index from all wiki pages."""
     import faiss
     import numpy as np
 
     fcfg = cfg["faiss"]
-    current_hashes = _wiki_page_hashes()
 
-    # Check if rebuild is needed
-    if not force and FAISS_INDEX_FILE.exists() and FAISS_STATE_FILE.exists():
-        state = load_json(FAISS_STATE_FILE, {})
-        stored_pages = state.get("pages", {})
-        if (
-            stored_pages == current_hashes
-            and state.get("embed_model") == fcfg["embed_model"]
-            and state.get("chunk_size") == fcfg["chunk_size"]
-            and state.get("chunk_overlap") == fcfg["chunk_overlap"]
-        ):
-            n_chunks = len(load_json(FAISS_META_FILE, []))
-            print("FAISS index is up to date.")
-            return {"pages": len(current_hashes), "chunks": n_chunks, "dimensions": state.get("dimensions", 0)}
-
-    if not current_hashes:
-        print("No wiki pages to index.")
-        return {"pages": 0, "chunks": 0, "dimensions": 0}
-
-    # Chunk all pages
-    all_chunks: list = []  # list of {"page", "text", "start", "end"}
+    all_chunks, chunk_ids = [], []
+    next_id = 0
     for page_name in sorted(current_hashes):
         text = read_text(WIKI / page_name)
         page_chunks = chunk_page(text, fcfg["chunk_size"], fcfg["chunk_overlap"])
@@ -217,6 +195,8 @@ def build_faiss_index(cfg: dict, force: bool = False) -> dict:
                 "start": c["start"],
                 "end": c["end"],
             })
+            chunk_ids.append(next_id)
+            next_id += 1
 
     if not all_chunks:
         print("No chunks generated.")
@@ -224,7 +204,6 @@ def build_faiss_index(cfg: dict, force: bool = False) -> dict:
 
     print(f"Embedding {len(all_chunks)} chunks from {len(current_hashes)} pages...")
 
-    # Embed all chunks
     texts = [c["text"] for c in all_chunks]
     embeddings = ollama_embed(
         texts,
@@ -233,26 +212,26 @@ def build_faiss_index(cfg: dict, force: bool = False) -> dict:
         timeout=cfg["ollama"]["timeout"],
     )
 
-    # Build numpy matrix and L2-normalise for cosine similarity via inner product
     matrix = np.array(embeddings, dtype=np.float32)
     faiss.normalize_L2(matrix)
 
     dim = matrix.shape[1]
-    index = faiss.IndexFlatIP(dim)
-    index.add(matrix)
+    flat = faiss.IndexFlatIP(dim)
+    index = faiss.IndexIDMap(flat)
+    ids = np.array(chunk_ids, dtype=np.int64)
+    index.add_with_ids(matrix, ids)
 
-    # Save everything
     faiss.write_index(index, str(FAISS_INDEX_FILE))
 
-    # Metadata: store text alongside page/offsets for context assembly
-    meta = []
-    for c in all_chunks:
-        meta.append({
+    # Meta keyed by string ID for JSON compatibility
+    meta = {}
+    for cid, c in zip(chunk_ids, all_chunks):
+        meta[str(cid)] = {
             "page": c["page"],
             "start": c["start"],
             "end": c["end"],
             "text": c["text"],
-        })
+        }
     save_json(FAISS_META_FILE, meta)
 
     save_json(FAISS_STATE_FILE, {
@@ -261,10 +240,139 @@ def build_faiss_index(cfg: dict, force: bool = False) -> dict:
         "chunk_size": fcfg["chunk_size"],
         "chunk_overlap": fcfg["chunk_overlap"],
         "dimensions": dim,
+        "next_id": next_id,
     })
 
     print(f"FAISS index built: {dim}-dimensional, {len(all_chunks)} vectors.")
     return {"pages": len(current_hashes), "chunks": len(all_chunks), "dimensions": dim}
+
+
+def _incremental_update(cfg: dict, current_hashes: dict, state: dict) -> dict:
+    """Incrementally update the FAISS index for new/changed/deleted pages."""
+    import faiss
+    import numpy as np
+
+    fcfg = cfg["faiss"]
+    stored_pages = state.get("pages", {})
+
+    # Determine which pages changed
+    added_or_changed = {
+        p for p in current_hashes
+        if current_hashes[p] != stored_pages.get(p)
+    }
+    deleted = set(stored_pages) - set(current_hashes)
+    dirty_pages = added_or_changed | deleted
+
+    if not dirty_pages:
+        meta = load_json(FAISS_META_FILE, {})
+        print("FAISS index is up to date.")
+        return {"pages": len(current_hashes), "chunks": len(meta), "dimensions": state.get("dimensions", 0)}
+
+    # Load existing index and meta
+    index = faiss.read_index(str(FAISS_INDEX_FILE))
+    meta = load_json(FAISS_META_FILE, {})
+    next_id = state.get("next_id", len(meta))
+
+    # Remove chunks belonging to changed or deleted pages
+    ids_to_remove = [
+        int(cid) for cid, m in meta.items()
+        if m["page"] in dirty_pages
+    ]
+    if ids_to_remove:
+        index.remove_ids(np.array(ids_to_remove, dtype=np.int64))
+        for cid in [str(i) for i in ids_to_remove]:
+            del meta[cid]
+
+    # Add chunks for new/changed pages
+    new_chunks, new_ids = [], []
+    for page_name in sorted(added_or_changed):
+        text = read_text(WIKI / page_name)
+        page_chunks = chunk_page(text, fcfg["chunk_size"], fcfg["chunk_overlap"])
+        for c in page_chunks:
+            new_chunks.append({
+                "page": page_name,
+                "text": c["text"],
+                "start": c["start"],
+                "end": c["end"],
+            })
+            new_ids.append(next_id)
+            next_id += 1
+
+    if new_chunks:
+        n_pages = len(added_or_changed)
+        print(f"Embedding {len(new_chunks)} chunks from {n_pages} new/changed page(s)...")
+        texts = [c["text"] for c in new_chunks]
+        embeddings = ollama_embed(
+            texts,
+            model=fcfg["embed_model"],
+            ollama_url=cfg["ollama"]["url"],
+            timeout=cfg["ollama"]["timeout"],
+        )
+        matrix = np.array(embeddings, dtype=np.float32)
+        faiss.normalize_L2(matrix)
+        ids_arr = np.array(new_ids, dtype=np.int64)
+        index.add_with_ids(matrix, ids_arr)
+
+        for cid, c in zip(new_ids, new_chunks):
+            meta[str(cid)] = {
+                "page": c["page"],
+                "start": c["start"],
+                "end": c["end"],
+                "text": c["text"],
+            }
+
+    faiss.write_index(index, str(FAISS_INDEX_FILE))
+    save_json(FAISS_META_FILE, meta)
+
+    save_json(FAISS_STATE_FILE, {
+        "pages": current_hashes,
+        "embed_model": fcfg["embed_model"],
+        "chunk_size": fcfg["chunk_size"],
+        "chunk_overlap": fcfg["chunk_overlap"],
+        "dimensions": state.get("dimensions", 0),
+        "next_id": next_id,
+    })
+
+    removed = len(ids_to_remove)
+    added = len(new_chunks)
+    print(f"FAISS index updated: removed {removed}, added {added} vectors.")
+    return {"pages": len(current_hashes), "chunks": len(meta), "dimensions": state.get("dimensions", 0)}
+
+
+def build_faiss_index(cfg: dict, force: bool = False) -> dict:
+    """Build or incrementally update the FAISS index from wiki pages.
+
+    Returns ``{"pages": int, "chunks": int, "dimensions": int}``.
+    """
+    fcfg = cfg["faiss"]
+    current_hashes = _wiki_page_hashes()
+    # Exclude INDEX.md from indexing
+    current_hashes.pop("INDEX.md", None)
+
+    if not current_hashes:
+        print("No wiki pages to index.")
+        return {"pages": 0, "chunks": 0, "dimensions": 0}
+
+    # Determine if we can do an incremental update
+    can_incremental = (
+        not force
+        and FAISS_INDEX_FILE.exists()
+        and FAISS_STATE_FILE.exists()
+        and FAISS_META_FILE.exists()
+    )
+
+    if can_incremental:
+        state = load_json(FAISS_STATE_FILE, {})
+        settings_match = (
+            state.get("embed_model") == fcfg["embed_model"]
+            and state.get("chunk_size") == fcfg["chunk_size"]
+            and state.get("chunk_overlap") == fcfg["chunk_overlap"]
+            and state.get("next_id") is not None  # old format lacks this
+        )
+        if settings_match:
+            return _incremental_update(cfg, current_hashes, state)
+
+    return _full_build(cfg, current_hashes)
 
 
 # ---------------------------------------------------------------------------
@@ -286,7 +394,11 @@ def search_chunks(question: str, cfg: dict) -> list:
         return []
 
     index = faiss.read_index(str(FAISS_INDEX_FILE))
-    meta = load_json(FAISS_META_FILE, [])
+    meta = load_json(FAISS_META_FILE, {})
+
+    # Backwards compat: old format stored meta as a list
+    if isinstance(meta, list):
+        meta = {str(i): m for i, m in enumerate(meta)}
 
     # Embed the question
     q_emb = ollama_embed(
@@ -306,9 +418,11 @@ def search_chunks(question: str, cfg: dict) -> list:
 
     results = []
     for score, idx in zip(scores[0], ids[0]):
-        if idx < 0 or idx >= len(meta):
+        if idx < 0:
             continue
-        m = meta[idx]
+        m = meta.get(str(idx))
+        if m is None:
+            continue
         results.append({
             "page": m["page"],
             "text": m["text"],
