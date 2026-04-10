@@ -7,6 +7,7 @@ import type { StatusResponse, CommandResponse } from "@/types";
 export function CompileTab() {
   const [model, setModel] = useState("");
   const [force, setForce] = useState(false);
+  const [maxChars, setMaxChars] = useState(55000);
   const [idxForce, setIdxForce] = useState(false);
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [result, setResult] = useState<CommandResponse | null>(null);
@@ -26,7 +27,7 @@ export function CompileTab() {
     setCompiling(true);
     setResult(null);
     try {
-      const res = await api.compile({ model, force });
+      const res = await api.compile({ model, force, max_source_chars: maxChars });
       setResult(res);
     } catch (e) {
       setResult({ returncode: 1, output: String(e), command: "" });
@@ -52,7 +53,7 @@ export function CompileTab() {
     <div className="space-y-6">
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
         <h2 className="text-lg font-semibold text-slate-900 mb-4">Compile Wiki</h2>
-        <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-3 gap-4 mb-4">
           <div>
             <label className="text-xs text-slate-500">Model</label>
             {status?.ollama.models && status.ollama.models.length > 0 ? (
@@ -64,6 +65,16 @@ export function CompileTab() {
             ) : (
               <input type="text" value={model} onChange={(e) => setModel(e.target.value)} className="w-full mt-1 px-2 py-1.5 border rounded-lg text-sm" />
             )}
+          </div>
+          <div>
+            <label className="text-xs text-slate-500">Max source chars</label>
+            <select value={maxChars} onChange={(e) => setMaxChars(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 border rounded-lg text-sm bg-white">
+              <option value={16000}>16K (small context)</option>
+              <option value={32000}>32K</option>
+              <option value={55000}>55K (default)</option>
+              <option value={100000}>100K</option>
+              <option value={200000}>200K (large context)</option>
+            </select>
           </div>
           <label className="flex items-center gap-2 pt-5">
             <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} className="rounded" />

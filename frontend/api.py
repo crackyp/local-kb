@@ -153,6 +153,7 @@ class IngestUrlRequest(BaseModel):
 class CompileRequest(BaseModel):
     model: str = DEFAULT_MODEL
     force: bool = False
+    max_source_chars: Optional[int] = None
 
 
 class AskRequest(BaseModel):
@@ -272,6 +273,8 @@ async def compile_wiki(data: CompileRequest):
     args = ["compile", "--model", data.model]
     if data.force:
         args.append("--force")
+    if data.max_source_chars is not None:
+        args.extend(["--max-source-chars", str(data.max_source_chars)])
     rc, out, cmd = run_kb(args)
     recommendations = []
     if rc == 0:

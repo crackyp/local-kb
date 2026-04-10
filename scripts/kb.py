@@ -711,6 +711,8 @@ def cmd_compile(args):
     ensure_dirs()
     if not ping_ollama():
         raise RuntimeError("Ollama is not running. Start it with: ollama serve")
+    if getattr(args, "max_source_chars", None) is not None:
+        CFG["compile"]["max_source_chars"] = args.max_source_chars
     state = load_json(STATE_FILE, {"compiled": {}})
     docs_index = load_json(DOC_INDEX_FILE, {})
 
@@ -1057,6 +1059,7 @@ def build_parser():
     p_compile = sub.add_parser("compile", help="Compile raw docs into wiki pages")
     p_compile.add_argument("--model", default=CFG["model"]["default"])
     p_compile.add_argument("--force", action="store_true")
+    p_compile.add_argument("--max-source-chars", type=int, default=None, help="Override max chars per source doc")
     p_compile.set_defaults(func=cmd_compile)
 
     p_ask = sub.add_parser("ask", help="Answer question from wiki and write markdown output")

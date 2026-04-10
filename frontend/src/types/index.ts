@@ -34,6 +34,7 @@ export interface IngestUrlRequest {
 export interface CompileRequest {
   model: string;
   force: boolean;
+  max_source_chars?: number;
 }
 
 export interface AskRequest {
