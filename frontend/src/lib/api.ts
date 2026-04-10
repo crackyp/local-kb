@@ -66,6 +66,50 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  compileStream: (
+    data: CompileRequest,
+    onLine: (text: string) => void,
+  ): { promise: Promise<CommandResponse>; abort: () => void } => {
+    const controller = new AbortController();
+    const promise = (async () => {
+      const res = await fetch(`${API_BASE}/api/compile/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let result: CommandResponse | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const msg = JSON.parse(line.slice(6));
+          if (msg.type === "line") {
+            onLine(msg.text);
+          } else if (msg.type === "done") {
+            result = {
+              returncode: msg.returncode,
+              output: msg.output,
+              command: "",
+              recommendations: msg.recommendations,
+            };
+          }
+        }
+      }
+      return result || { returncode: 1, output: "Stream ended unexpectedly", command: "" };
+    })();
+    return { promise, abort: () => controller.abort() };
+  },
+
   buildIndex: (data: IndexRequest) =>
     request<CommandResponse>("/api/index", {
       method: "POST",
@@ -87,6 +131,13 @@ export const api = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ filename }),
+    }),
+
+  correct: (question: string, correction: string) =>
+    request<CommandResponse>("/api/correct", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, correction }),
     }),
 
   healthCheck: (data: HealthCheckRequest) =>

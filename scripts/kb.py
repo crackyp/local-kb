@@ -646,7 +646,8 @@ def update_doc(filename: str, text: str, existing_wiki: str, model: str) -> str:
     prompt = f"""You are updating a personal research wiki article with new source material.
 Merge the new information into the existing article. Preserve the existing structure and content.
 Add new facts, quotes, and points. Do not remove existing content unless it's contradicted.
-Keep the same markdown format with: Summary, Key Points, Notable Quotes, Open Questions, Related Concepts.
+Preserve specific details: procedures, methods, requirements, timelines, definitions, and conditions.
+Keep the same markdown section structure. Add new sections if the new source covers topics not in the existing article.
 Add 3-8 wiki style links in markdown form like [Concept](concept.md) when relevant.
 
 EXISTING ARTICLE:
@@ -660,19 +661,25 @@ NEW SOURCE ({filename}):
 
 def _summarize_single(filename: str, text: str, model: str) -> str:
     """Single-pass summarization (truncates if needed)."""
+    source_text = truncate_at_sentence(text, CFG["compile"]["max_source_chars"])
     prompt = f"""You are compiling a personal research wiki.
-Create a concise markdown article from this source document.
+Create a comprehensive markdown article from this source document.
+Your article should preserve the important detail from the source — do NOT over-summarize.
 
 Requirements:
 - Start with '# <Title>' where <Title> is a short, descriptive phrase (3-7 words) that captures the MAIN TOPIC or CONCEPT of the content — NOT the filename. Examples: "# Attention Mechanisms in Transformers", "# Notes on Stoic Philosophy", "# 2024 Q3 Budget Analysis".
-- Include sections: Summary, Key Points, Notable Quotes, Open Questions, Related Concepts
-- Add 3-8 wiki style links in markdown form like [Concept](concept.md) when relevant.
-- Keep it factual and grounded in the source.
+- Start with a ## Summary section (one paragraph overview).
+- Then use ## sections that mirror the source document's own structure (e.g., if the source has Rule 1, Rule 2, etc., create sections for each; if it has chapters, use those).
+- Within each section, preserve specific details: procedures, methods, requirements, timelines, numbered lists, definitions, and conditions. Use sub-headings (###) and bullet points to organize dense content.
+- If the source is a legal document, regulation, or technical specification, preserve the specific rules, requirements, and procedures — these details ARE the knowledge.
+- End with: ## Notable Quotes (2-5 key quotes), ## Open Questions, ## Related Concepts (3-8 wiki links in markdown form like [Concept](concept.md)).
+- Keep it factual and grounded in the source. Do not invent information.
+- The article length should be proportional to the source detail. A detailed source should produce a detailed article.
 
 Source file: {filename}
 
 SOURCE:
-{truncate_at_sentence(text, CFG["compile"]["max_source_chars"])}
+{source_text}
 """
     return ollama_generate(prompt, model=model)
 
@@ -717,13 +724,15 @@ SOURCE:
     combined = "\n\n---\n\n".join(f"Part {i+1}:\n{s}" for i, s in enumerate(summaries))
     prompt = f"""You are compiling a personal research wiki.
 Below are summaries extracted from different parts of the same source document.
-Merge them into a single, coherent markdown article. Remove duplicates and organize logically.
+Merge them into a single, comprehensive markdown article. Remove duplicates and organize logically.
 
 Requirements:
 - Start with '# <Title>' where <Title> is a short, descriptive phrase (3-7 words) that captures the MAIN TOPIC or CONCEPT of the content — NOT the filename.
-- Include sections: Summary, Key Points, Notable Quotes, Open Questions, Related Concepts
-- Add 3-8 wiki style links in markdown form like [Concept](concept.md) when relevant.
-- Keep it factual and grounded in the source.
+- Start with a ## Summary section (one paragraph overview).
+- Then use ## sections that mirror the source document's structure. Preserve specific details: procedures, methods, requirements, timelines, definitions, and conditions.
+- Use ### sub-headings and bullet points to organize dense content.
+- End with: ## Notable Quotes, ## Open Questions, ## Related Concepts (3-8 wiki links like [Concept](concept.md)).
+- Keep it factual. Do not omit important details just to be brief — the article length should be proportional to the source detail.
 
 Source file: {filename}
 
@@ -813,7 +822,10 @@ def cmd_compile(args):
         digest = sha256_text(text)
         rel_name = str(path.relative_to(RAW))
         prev = state["compiled"].get(rel_name)
-        if prev == digest and not args.force:
+        # Recompile if: hash changed, wiki page was deleted, or force flag set
+        wiki_page = docs_index.get(rel_name, {}).get("wiki_page")
+        wiki_exists = (WIKI / wiki_page).exists() if wiki_page else False
+        if prev == digest and wiki_exists and not args.force:
             continue
 
         # Check if this new raw doc should merge into an existing wiki page
@@ -977,7 +989,8 @@ WIKI CONTEXT:
 
     ts = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     out_path = OUTPUTS / f"qa-{ts}.md"
-    out_path.write_text(answer + "\n", encoding="utf-8")
+    header = f"> **Q:** {args.question}\n\n"
+    out_path.write_text(header + answer + "\n", encoding="utf-8")
     print(f"Wrote: {out_path}")
 
 
@@ -1041,6 +1054,17 @@ def cmd_promote(args):
         dst = unique_path(dst)
     shutil.copy2(src, dst)
     print(f"Promoted: {src.name} -> raw/{dst.name}")
+
+
+def cmd_correct(args):
+    ensure_dirs()
+    ts = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    content = f"# Correction: {args.question}\n\n"
+    content += f"> **Original question:** {args.question}\n\n"
+    content += f"## Correct Information\n\n{args.correction}\n"
+    dst = RAW / f"correction-{ts}.md"
+    dst.write_text(content, encoding="utf-8")
+    print(f"Saved correction: raw/{dst.name}")
 
 
 def cmd_health_check(args):
@@ -1149,6 +1173,11 @@ def build_parser():
     p_promote = sub.add_parser("promote", help="Copy an output file into raw/ for recompilation")
     p_promote.add_argument("filename", help="Filename in kb/outputs/ to promote")
     p_promote.set_defaults(func=cmd_promote)
+
+    p_correct = sub.add_parser("correct", help="Save a correction note to raw/ for recompilation")
+    p_correct.add_argument("question", help="The original question that was answered incorrectly")
+    p_correct.add_argument("correction", help="The correct information")
+    p_correct.set_defaults(func=cmd_correct)
 
     p_health = sub.add_parser("health-check", help="LLM-powered wiki quality review")
     p_health.add_argument("--model", default=CFG["model"]["default"])

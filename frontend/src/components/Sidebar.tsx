@@ -23,6 +23,10 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
 
   useEffect(() => {
     api.getStatus().then(setStatus).catch(console.error);
+    const interval = setInterval(() => {
+      api.getStatus().then(setStatus).catch(console.error);
+    }, 10000);
+    return () => clearInterval(interval);
   }, [refreshKey]);
 
   return (

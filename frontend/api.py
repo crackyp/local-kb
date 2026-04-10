@@ -12,7 +12,7 @@ from typing import List, Optional
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -173,6 +173,11 @@ class PromoteRequest(BaseModel):
     filename: str
 
 
+class CorrectRequest(BaseModel):
+    question: str
+    correction: str
+
+
 class HealthCheckRequest(BaseModel):
     model: str = DEFAULT_MODEL
 
@@ -293,6 +298,47 @@ async def compile_wiki(data: CompileRequest):
     return {"returncode": rc, "output": out, "command": cmd, "recommendations": recommendations}
 
 
+@app.post("/api/compile/stream")
+async def compile_wiki_stream(data: CompileRequest):
+    args = ["compile", "--model", data.model]
+    if data.force:
+        args.append("--force")
+    if data.max_source_chars is not None:
+        args.extend(["--max-source-chars", str(data.max_source_chars)])
+    if data.chunking:
+        args.append("--chunking")
+
+    cmd = [sys.executable, "-u", str(CLI_PATH), *args]
+
+    def generate():
+        proc = subprocess.Popen(
+            cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1,
+        )
+        full_output = []
+        for line in proc.stdout:
+            stripped = line.rstrip("\n\r")
+            full_output.append(stripped)
+            yield f"data: {json.dumps({'type': 'line', 'text': stripped})}\n\n"
+
+        proc.wait()
+        output = "\n".join(full_output)
+        recommendations = []
+        if proc.returncode == 0:
+            if "Compiling:" in output or "Merging:" in output:
+                recommendations.append({
+                    "message": "Wiki updated. FAISS index may be stale — rebuild?",
+                    "action": "rebuild_index",
+                })
+            else:
+                recommendations.append({
+                    "message": "All sources up to date. Add new raw files to grow the wiki.",
+                })
+        yield f"data: {json.dumps({'type': 'done', 'returncode': proc.returncode, 'output': output, 'recommendations': recommendations})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
+
+
 @app.post("/api/index")
 async def build_index(data: IndexRequest):
     args = ["index"]
@@ -351,6 +397,18 @@ async def lint_wiki():
 async def promote_output(data: PromoteRequest):
     rc, out, cmd = run_kb(["promote", data.filename])
     return {"returncode": rc, "output": out, "command": cmd}
+
+
+@app.post("/api/correct")
+async def correct_answer(data: CorrectRequest):
+    rc, out, cmd = run_kb(["correct", data.question, data.correction])
+    recommendations = []
+    if rc == 0:
+        recommendations.append({
+            "message": "Correction saved. Recompile to update the wiki.",
+            "action": "compile",
+        })
+    return {"returncode": rc, "output": out, "command": cmd, "recommendations": recommendations}
 
 
 @app.post("/api/health-check")

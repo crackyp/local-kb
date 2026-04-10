@@ -517,6 +517,7 @@ def is_index_stale() -> bool:
 
     state = load_json(FAISS_STATE_FILE, {})
     current = _wiki_page_hashes()
+    current.pop("INDEX.md", None)
     fcfg = CFG["faiss"]
 
     if state.get("pages", {}) != current:

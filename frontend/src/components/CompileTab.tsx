@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 import type { StatusResponse, CommandResponse } from "@/types";
 
@@ -12,8 +12,16 @@ export function CompileTab() {
   const [idxForce, setIdxForce] = useState(false);
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [result, setResult] = useState<CommandResponse | null>(null);
+  const [liveLines, setLiveLines] = useState<string[]>([]);
   const [compiling, setCompiling] = useState(false);
   const [indexing, setIndexing] = useState(false);
+  const liveRef = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    if (liveRef.current) {
+      liveRef.current.scrollTop = liveRef.current.scrollHeight;
+    }
+  }, [liveLines]);
 
   useEffect(() => {
     api.getStatus().then((s) => {
@@ -27,11 +35,18 @@ export function CompileTab() {
   const handleCompile = async () => {
     setCompiling(true);
     setResult(null);
+    setLiveLines([]);
     try {
-      const res = await api.compile({ model, force, max_source_chars: maxChars, chunking });
+      const { promise } = api.compileStream(
+        { model, force, max_source_chars: maxChars, chunking },
+        (line) => setLiveLines((prev) => [...prev, line]),
+      );
+      const res = await promise;
       setResult(res);
+      setLiveLines([]);
     } catch (e) {
       setResult({ returncode: 1, output: String(e), command: "" });
+      setLiveLines([]);
     } finally {
       setCompiling(false);
     }
@@ -113,6 +128,15 @@ export function CompileTab() {
           {indexing ? "Building..." : "Build FAISS Index"}
         </button>
       </div>
+
+      {compiling && liveLines.length > 0 && (
+        <div className="bg-slate-800 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-blue-400 text-sm animate-pulse">Compiling...</span>
+          </div>
+          <pre ref={liveRef} className="text-xs text-slate-300 overflow-auto max-h-64">{liveLines.join("\n")}</pre>
+        </div>
+      )}
 
       {result && (
         <div className="bg-slate-800 rounded-xl p-4">

@@ -15,6 +15,9 @@ export function AskTab() {
   const [history, setHistory] = useState<QaHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [promoted, setPromoted] = useState<string | null>(null);
+  const [showCorrection, setShowCorrection] = useState(false);
+  const [correction, setCorrection] = useState("");
+  const [correctionSaved, setCorrectionSaved] = useState(false);
 
   useEffect(() => {
     api.getStatus().then(setStatus).catch(console.error);
@@ -37,12 +40,27 @@ export function AskTab() {
     }
   };
 
+  const handleCorrect = async () => {
+    if (!correction.trim() || !question.trim()) return;
+    try {
+      const res = await api.correct(question.trim(), correction.trim());
+      if (res.returncode === 0) {
+        setCorrectionSaved(true);
+      }
+    } catch (e) {
+      console.error("Correction failed:", e);
+    }
+  };
+
   const handleAsk = async () => {
     if (!question.trim()) return;
     if (!model) return;
     setLoading(true);
     setResult(null);
     setPromoted(null);
+    setShowCorrection(false);
+    setCorrection("");
+    setCorrectionSaved(false);
     try {
       const res = await api.ask({ question: question.trim(), model, limit, use_faiss: useFaiss });
       setResult(res);
@@ -143,7 +161,37 @@ export function AskTab() {
                 )
               ) : null
             )}
+            {correctionSaved ? (
+              <span className="px-3 py-1.5 bg-green-50 text-green-700 rounded text-xs font-medium">
+                Correction saved — recompile to apply
+              </span>
+            ) : (
+              <button
+                onClick={() => setShowCorrection(!showCorrection)}
+                className="px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded text-xs font-medium hover:bg-red-100"
+              >
+                {showCorrection ? "Cancel" : "Flag & Correct"}
+              </button>
+            )}
           </div>
+          {showCorrection && !correctionSaved && (
+            <div className="mt-4 space-y-2">
+              <label className="text-xs text-slate-500">What is the correct information?</label>
+              <textarea
+                value={correction}
+                onChange={(e) => setCorrection(e.target.value)}
+                placeholder="Explain what the correct answer should be, with as much detail as you can provide..."
+                className="w-full h-32 px-3 py-2 border border-red-200 rounded-lg text-sm focus:ring-2 focus:ring-red-400 focus:border-red-400"
+              />
+              <button
+                onClick={handleCorrect}
+                disabled={!correction.trim()}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                Save Correction to KB
+              </button>
+            </div>
+          )}
         </div>
       )}
 
