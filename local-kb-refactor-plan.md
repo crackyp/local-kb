@@ -78,7 +78,7 @@ local_kb/
 
 ## Phase 0, Stabilize Before Refactor
 
-### 0.1 Add smoke tests
+### 0.1 Add smoke tests (DONE)
 Create a minimal test set covering:
 - ingest a markdown file
 - compile one source into one wiki page
@@ -101,7 +101,7 @@ Explicitly test `INDEX.md` handling and FAISS stale state.
 
 ---
 
-## Phase 1, Untangle Core Python Code
+## Phase 1, Untangle Core Python Code (DONE)
 
 ### 1.1 Extract shared paths/config first
 Move these out of `scripts/kb.py`:

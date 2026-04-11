@@ -4,6 +4,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KB = ROOT / "kb"
+KB_DIR = KB  # alias used by api.py
+SCRIPTS_DIR = ROOT / "scripts"
 RAW = KB / "raw"
 RAW_ASSETS = RAW / "assets"
 WIKI = KB / "wiki"
