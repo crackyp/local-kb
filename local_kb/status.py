@@ -5,13 +5,13 @@ and FAISS index state.  Used by both the API and CLI.
 """
 
 import json
-import sys
 import urllib.request
 from pathlib import Path
 from typing import List
 
 from .config import CFG
-from .paths import RAW, WIKI, OUTPUTS, SCRIPTS_DIR, ensure_dirs
+from .paths import RAW, RAW_ASSETS, WIKI, OUTPUTS, CORRECTIONS, ensure_dirs
+from .index_state import status_label as faiss_status_label
 
 
 # ---------------------------------------------------------------------------
@@ -43,33 +43,16 @@ def ollama_models() -> List[str]:
 # File counts
 # ---------------------------------------------------------------------------
 
-def _count_files(directory: Path, pattern: str = "**/*") -> int:
+def _count_files(directory: Path, pattern: str = "**/*", exclude: list[Path] | None = None) -> int:
     if not directory.exists():
         return 0
+    excluded = [e.resolve() for e in (exclude or []) if e.exists()]
     return sum(
         1 for p in directory.glob(pattern)
-        if p.is_file() and p.name != ".gitkeep"
+        if p.is_file()
+        and p.name != ".gitkeep"
+        and not any(ex in p.resolve().parents for ex in excluded)
     )
-
-
-# ---------------------------------------------------------------------------
-# FAISS state
-# ---------------------------------------------------------------------------
-
-def faiss_status() -> str:
-    """Return one of: ready, stale, not_built, not_installed, unavailable."""
-    try:
-        if str(SCRIPTS_DIR) not in sys.path:
-            sys.path.insert(0, str(SCRIPTS_DIR))
-        from faiss_index import faiss_available, is_index_stale, FAISS_INDEX_FILE
-
-        if not faiss_available():
-            return "not_installed"
-        if not FAISS_INDEX_FILE.exists():
-            return "not_built"
-        return "stale" if is_index_stale() else "ready"
-    except Exception:
-        return "unavailable"
 
 
 # ---------------------------------------------------------------------------
@@ -82,12 +65,18 @@ def get_status() -> dict:
     alive = ollama_is_running()
     models = ollama_models() if alive else []
 
+    try:
+        faiss = faiss_status_label()
+    except Exception:
+        faiss = "unavailable"
+
     return {
         "ollama": {"running": alive, "models": models},
         "files": {
-            "raw": _count_files(RAW),
+            "raw": _count_files(RAW, exclude=[RAW_ASSETS]),
             "wiki": _count_files(WIKI, "*.md"),
             "outputs": _count_files(OUTPUTS, "*.md"),
+            "corrections": _count_files(CORRECTIONS, "*.md"),
         },
-        "faiss": faiss_status(),
+        "faiss": faiss,
     }

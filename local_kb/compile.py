@@ -81,6 +81,58 @@ def build_wiki_index(changed_pages: set | None = None):
 
 
 # ---------------------------------------------------------------------------
+# docs.json integrity
+# ---------------------------------------------------------------------------
+
+
+def validate_docs_index() -> dict:
+    """Validate docs.json against the filesystem and clean up orphans.
+
+    Returns ``{"removed_sources": [...], "removed_wikis": [...], "valid": int}``.
+    """
+    docs_index = load_json(DOC_INDEX_FILE, {})
+    state = load_json(STATE_FILE, {"compiled": {}})
+    removed_sources = []
+    removed_wikis = []
+
+    for rel_name in list(docs_index):
+        entry = docs_index[rel_name]
+
+        # Handle legacy format where value was a plain string
+        if isinstance(entry, str):
+            del docs_index[rel_name]
+            state["compiled"].pop(rel_name, None)
+            removed_sources.append(rel_name)
+            continue
+
+        source_path = RAW / rel_name
+        wiki_page = entry.get("wiki_page", "")
+        wiki_path = WIKI / wiki_page if wiki_page else None
+
+        # Source no longer exists — remove the mapping
+        if not source_path.exists():
+            removed_sources.append(rel_name)
+            del docs_index[rel_name]
+            state["compiled"].pop(rel_name, None)
+            continue
+
+        # Wiki page no longer exists — clear the mapping so it recompiles
+        if wiki_path and not wiki_path.exists():
+            removed_wikis.append(wiki_page)
+            del docs_index[rel_name]
+            state["compiled"].pop(rel_name, None)
+
+    save_json(DOC_INDEX_FILE, docs_index)
+    save_json(STATE_FILE, state)
+
+    return {
+        "removed_sources": removed_sources,
+        "removed_wikis": removed_wikis,
+        "valid": len(docs_index),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Matching / merging
 # ---------------------------------------------------------------------------
 
@@ -298,6 +350,12 @@ def compile_documents(
     if chunking:
         CFG["compile"]["chunking"] = True
 
+    # Clean up orphaned mappings before compiling
+    cleanup = validate_docs_index()
+    if cleanup["removed_sources"] or cleanup["removed_wikis"]:
+        print(f"Cleaned docs.json: {len(cleanup['removed_sources'])} orphaned sources, "
+              f"{len(cleanup['removed_wikis'])} missing wiki pages")
+
     state = load_json(STATE_FILE, {"compiled": {}})
     docs_index = load_json(DOC_INDEX_FILE, {})
 
@@ -376,10 +434,12 @@ def compile_documents(
         out_path.write_text(article.strip() + source_note, encoding="utf-8")
 
         state["compiled"][rel_name] = digest
+        compile_mode = "merge" if merge_match else ("chunked" if (CFG["compile"].get("chunking") and len(text) > CFG["compile"]["max_source_chars"]) else "single")
         docs_index[rel_name] = {
             "wiki_page": out_path.name,
             "sha256": digest,
             "updated_at": dt.datetime.now().isoformat(),
+            "compile_mode": compile_mode,
         }
         changed_wiki_pages.add(out_path.name)
         compiled_now += 1

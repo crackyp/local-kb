@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { StatusResponse, View } from "@/types";
-import { api } from "@/lib/api";
+import type { View } from "@/types";
+import { useStatus } from "@/lib/StatusContext";
+import { StatusBadge, ModelSelect } from "@/components/shared";
 
 const NAV_ITEMS: { id: View; label: string }[] = [
   { id: "explorer", label: "Explorer" },
@@ -18,16 +18,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activeView, onNavigate }: SidebarProps) {
-  const [status, setStatus] = useState<StatusResponse | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  useEffect(() => {
-    api.getStatus().then(setStatus).catch(console.error);
-    const interval = setInterval(() => {
-      api.getStatus().then(setStatus).catch(console.error);
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [refreshKey]);
+  const { status, refresh } = useStatus();
 
   return (
     <aside className="w-56 min-h-screen bg-slate-900 text-slate-100 flex flex-col">
@@ -55,53 +46,19 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
       <div className="p-4 flex-1 overflow-y-auto space-y-3">
         <div className="p-3 rounded-lg bg-slate-800/50">
           <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">Ollama</div>
-          {status?.ollama.running ? (
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-sm text-green-400">Running</span>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-red-500" />
-              <span className="text-sm text-red-400">Not Running</span>
-            </div>
-          )}
+          <StatusBadge value={status?.ollama.running ? "running" : "not_running"} />
         </div>
 
         {status?.ollama.models && status.ollama.models.length > 0 && (
           <div className="p-3 rounded-lg bg-slate-800/50">
             <div className="text-xs text-slate-400 uppercase tracking-wide mb-2">Default Model</div>
-            <select className="w-full bg-slate-700 rounded px-2 py-1.5 text-sm">
-              {status.ollama.models.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
+            <ModelSelect />
           </div>
         )}
 
         <div className="p-3 rounded-lg bg-slate-800/50">
           <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">FAISS Index</div>
-          {status?.faiss === "ready" && (
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500" />
-              <span className="text-sm text-green-400">Ready</span>
-            </div>
-          )}
-          {status?.faiss === "stale" && (
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-yellow-500" />
-              <span className="text-sm text-yellow-400">Stale</span>
-            </div>
-          )}
-          {status?.faiss === "not_built" && (
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-slate-500" />
-              <span className="text-sm text-slate-400">Not Built</span>
-            </div>
-          )}
-          {status?.faiss === "not_installed" && (
-            <div className="text-xs text-slate-500">Not installed</div>
-          )}
+          <StatusBadge value={status?.faiss ?? "unknown"} />
         </div>
 
         <div className="border-t border-slate-700 pt-3 space-y-2">
@@ -122,10 +79,10 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
 
       <div className="p-3 border-t border-slate-700">
         <button
-          onClick={() => setRefreshKey((k) => k + 1)}
+          onClick={refresh}
           className="w-full px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm transition-colors"
         >
-          🔄 Refresh
+          Refresh
         </button>
       </div>
     </aside>

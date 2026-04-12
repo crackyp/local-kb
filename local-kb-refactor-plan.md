@@ -157,7 +157,7 @@ If it’s still 1200 lines after refactor, the refactor failed.
 
 ---
 
-## Phase 2, Fix the API Layer
+## Phase 2, Fix the API Layer (DONE)
 
 ### 2.1 Stop shelling out for internal operations
 Current pattern:
@@ -213,7 +213,7 @@ You can still include raw details for debugging.
 
 ---
 
-## Phase 3, Clean Up the Frontend
+## Phase 3, Clean Up the Frontend (DONE)
 
 ### 3.1 Make runtime config real
 Stop hardcoding:
@@ -262,7 +262,7 @@ Add:
 
 ---
 
-## Phase 4, Runtime and Setup Cleanup
+## Phase 4, Runtime and Setup Cleanup (DONE)
 
 ### 4.1 Replace ad hoc startup with proper config-driven startup
 Current startup is fragile because it assumes:

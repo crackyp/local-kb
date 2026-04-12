@@ -1,16 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { api } from "@/lib/api";
-import type { StatusResponse, QaHistoryEntry, AskResponse, Recommendation } from "@/types";
+import { useStatus } from "@/lib/StatusContext";
+import type { QaHistoryEntry, AskResponse } from "@/types";
+import {
+  SectionCard,
+  ModelSelect,
+  CommandResultPanel,
+  ActionButton,
+} from "@/components/shared";
 
 export function AskTab() {
+  const { model, refresh: refreshStatus } = useStatus();
   const [question, setQuestion] = useState("");
-  const [model, setModel] = useState("");
   const [limit, setLimit] = useState(6);
   const [useFaiss, setUseFaiss] = useState(true);
-  const [status, setStatus] = useState<StatusResponse | null>(null);
   const [result, setResult] = useState<AskResponse | null>(null);
   const [history, setHistory] = useState<QaHistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
@@ -19,21 +26,12 @@ export function AskTab() {
   const [correction, setCorrection] = useState("");
   const [correctionSaved, setCorrectionSaved] = useState(false);
 
-  useEffect(() => {
-    api.getStatus().then(setStatus).catch(console.error);
-  }, []);
-
-  useEffect(() => {
-    if (!model && status?.ollama.models && status.ollama.models.length > 0) {
-      setModel(status.ollama.models[0]);
-    }
-  }, [status, model]);
-
   const handlePromote = async (filename: string) => {
     try {
       const res = await api.promote(filename);
       if (res.returncode === 0) {
         setPromoted(filename);
+        refreshStatus();
       }
     } catch (e) {
       console.error("Promote failed:", e);
@@ -53,8 +51,7 @@ export function AskTab() {
   };
 
   const handleAsk = async () => {
-    if (!question.trim()) return;
-    if (!model) return;
+    if (!question.trim() || !model) return;
     setLoading(true);
     setResult(null);
     setPromoted(null);
@@ -68,6 +65,7 @@ export function AskTab() {
         { question: question.trim(), file: res.written_file || "unknown", time: new Date().toLocaleString() },
         ...prev.slice(0, 9),
       ]);
+      refreshStatus();
     } catch (e) {
       setResult({ returncode: 1, output: String(e), command: "", answer: "", written_file: null });
     } finally {
@@ -77,8 +75,7 @@ export function AskTab() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Ask the Wiki</h2>
+      <SectionCard title="Ask the Wiki">
         <textarea
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
@@ -87,18 +84,7 @@ export function AskTab() {
         />
 
         <div className="grid grid-cols-3 gap-4 mt-4">
-          <div>
-            <label className="text-xs text-slate-500">Model</label>
-            {status?.ollama.models && status.ollama.models.length > 0 ? (
-              <select value={model} onChange={(e) => setModel(e.target.value)} className="w-full mt-1 px-2 py-1.5 border rounded-lg text-sm bg-white">
-                {status.ollama.models.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            ) : (
-              <input type="text" value={model} onChange={(e) => setModel(e.target.value)} className="w-full mt-1 px-2 py-1.5 border rounded-lg text-sm" />
-            )}
-          </div>
+          <ModelSelect value={model} />
           <div>
             <label className="text-xs text-slate-500">Page limit (TF-IDF)</label>
             <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 border rounded-lg text-sm bg-white">
@@ -113,20 +99,17 @@ export function AskTab() {
           </label>
         </div>
 
-        <button
-          onClick={handleAsk}
-          disabled={loading || !question.trim()}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? "Thinking..." : "Run Q&A"}
-        </button>
-      </div>
+        <div className="mt-4">
+          <ActionButton onClick={handleAsk} loading={loading} disabled={!question.trim()} loadingText="Thinking...">
+            Run Q&A
+          </ActionButton>
+        </div>
+      </SectionCard>
 
       {result && result.answer && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="font-semibold text-slate-900 mb-3">Answer</h3>
+        <SectionCard title="Answer">
           <div className="prose prose-slate prose-sm max-w-none bg-slate-50 rounded-lg p-4">
-            <ReactMarkdown>{result.answer}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{result.answer}</ReactMarkdown>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {result.written_file && (
@@ -192,25 +175,13 @@ export function AskTab() {
               </button>
             </div>
           )}
-        </div>
+        </SectionCard>
       )}
 
-      {result && (
-        <div className="bg-slate-800 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            {result.returncode === 0 ? (
-              <span className="text-green-400 text-sm">✓ Done</span>
-            ) : (
-              <span className="text-red-400 text-sm">✗ Failed (exit {result.returncode})</span>
-            )}
-          </div>
-          <pre className="text-xs text-slate-300 overflow-auto max-h-64">{result.output}</pre>
-        </div>
-      )}
+      <CommandResultPanel result={result} />
 
       {history.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="font-semibold text-slate-900 mb-3">Recent Q&A History</h3>
+        <SectionCard title="Recent Q&A History">
           <div className="space-y-2">
             {history.map((entry, i) => (
               <div key={i} className="text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded">
@@ -219,7 +190,7 @@ export function AskTab() {
               </div>
             ))}
           </div>
-        </div>
+        </SectionCard>
       )}
     </div>
   );

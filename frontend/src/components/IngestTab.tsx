@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { useStatus } from "@/lib/StatusContext";
+import { CommandResultPanel, ActionButton } from "@/components/shared";
 
 type IngestMode = "files" | "url" | "pdf";
 
@@ -12,6 +14,7 @@ const SUB_TABS: { id: IngestMode; label: string }[] = [
 ];
 
 export function IngestTab() {
+  const { refresh: refreshStatus } = useStatus();
   const [mode, setMode] = useState<IngestMode>("files");
 
   // Files state
@@ -45,20 +48,24 @@ export function IngestTab() {
     setUploadFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const handleUploadFiles = async () => {
-    if (!uploadFiles.length) return;
+  const withRefresh = async (fn: () => Promise<void>) => {
     setLoading(true);
     setResult(null);
     try {
-      const res = await api.ingestUpload(uploadFiles);
-      setResult({ returncode: 0, output: `Uploaded ${res.count} file(s):\n${res.saved.map((s) => `  ${s.name} (${(s.size / 1024).toFixed(1)} KB)`).join("\n")}` });
-      setUploadFiles([]);
-    } catch (e) {
-      setResult({ returncode: 1, output: String(e) });
+      await fn();
+      refreshStatus();
     } finally {
       setLoading(false);
     }
   };
+
+  const handleUploadFiles = () =>
+    withRefresh(async () => {
+      if (!uploadFiles.length) return;
+      const res = await api.ingestUpload(uploadFiles);
+      setResult({ returncode: 0, output: `Uploaded ${res.count} file(s):\n${res.saved.map((s) => `  ${s.name} (${(s.size / 1024).toFixed(1)} KB)`).join("\n")}` });
+      setUploadFiles([]);
+    });
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -67,7 +74,6 @@ export function IngestTab() {
     if (files.length) {
       addFiles(files);
     } else {
-      // Network shares / UNC paths come through as text, not files
       const text = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text");
       if (text?.trim()) {
         setPaths((prev) => (prev ? prev + "\n" + text.trim() : text.trim()));
@@ -75,47 +81,26 @@ export function IngestTab() {
     }
   };
 
-  const handleIngestPath = async () => {
-    const lines = paths.split("\n").map((l) => l.trim()).filter(Boolean);
-    if (!lines.length) return;
-    setLoading(true);
-    setResult(null);
-    try {
+  const handleIngestPath = () =>
+    withRefresh(async () => {
+      const lines = paths.split("\n").map((l) => l.trim()).filter(Boolean);
+      if (!lines.length) return;
       setResult(await api.ingestPath(lines));
-    } catch (e) {
-      setResult({ returncode: 1, output: String(e) });
-    } finally {
-      setLoading(false);
-    }
-  };
+    });
 
-  const handleIngestUrl = async () => {
-    const lines = urls.split("\n").map((l) => l.trim()).filter(Boolean);
-    if (!lines.length) return;
-    setLoading(true);
-    setResult(null);
-    try {
+  const handleIngestUrl = () =>
+    withRefresh(async () => {
+      const lines = urls.split("\n").map((l) => l.trim()).filter(Boolean);
+      if (!lines.length) return;
       setResult(await api.ingestUrl({ urls: lines, download_images: downloadImages, max_images: maxImages, timeout: urlTimeout }));
-    } catch (e) {
-      setResult({ returncode: 1, output: String(e) });
-    } finally {
-      setLoading(false);
-    }
-  };
+    });
 
-  const handleIngestPdf = async () => {
-    if (!pdfFiles.length) return;
-    setLoading(true);
-    setResult(null);
-    try {
+  const handleIngestPdf = () =>
+    withRefresh(async () => {
+      if (!pdfFiles.length) return;
       setResult(await api.ingestPdf(pdfFiles, maxPages, copyOriginal));
       setPdfFiles([]);
-    } catch (e) {
-      setResult({ returncode: 1, output: String(e) });
-    } finally {
-      setLoading(false);
-    }
-  };
+    });
 
   return (
     <div className="space-y-6">
@@ -152,7 +137,6 @@ export function IngestTab() {
                   dragging ? "border-blue-500 bg-blue-50" : "border-slate-300 hover:border-blue-400"
                 }`}
               >
-                <div className="text-4xl mb-3">📁</div>
                 <div className="text-base font-medium text-slate-700 mb-1">Drop files here or click to upload</div>
                 <div className="text-sm text-slate-500">Supports any file type</div>
                 <input
@@ -185,13 +169,9 @@ export function IngestTab() {
                       </div>
                     ))}
                   </div>
-                  <button
-                    onClick={handleUploadFiles}
-                    disabled={loading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? "Uploading..." : `Upload ${uploadFiles.length} file(s)`}
-                  </button>
+                  <ActionButton onClick={handleUploadFiles} loading={loading} loadingText="Uploading...">
+                    Upload {uploadFiles.length} file(s)
+                  </ActionButton>
                 </div>
               )}
               <div>
@@ -209,13 +189,11 @@ export function IngestTab() {
                   placeholder="/Users/you/Research/*.md&#10;/Users/you/Research/*.txt"
                   className="mt-2 w-full h-28 px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
-                <button
-                  onClick={handleIngestPath}
-                  disabled={loading || !paths.trim()}
-                  className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? "Ingesting..." : "Ingest by Path"}
-                </button>
+                <div className="mt-2">
+                  <ActionButton onClick={handleIngestPath} loading={loading} disabled={!paths.trim()} loadingText="Ingesting...">
+                    Ingest by Path
+                  </ActionButton>
+                </div>
               </div>
             </div>
           )}
@@ -242,20 +220,15 @@ export function IngestTab() {
                   <input type="number" min={5} max={300} value={urlTimeout} onChange={(e) => setUrlTimeout(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm" />
                 </div>
               </div>
-              <button
-                onClick={handleIngestUrl}
-                disabled={loading || !urls.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? "Fetching..." : "Ingest URL(s)"}
-              </button>
+              <ActionButton onClick={handleIngestUrl} loading={loading} disabled={!urls.trim()} loadingText="Fetching...">
+                Ingest URL(s)
+              </ActionButton>
             </div>
           )}
 
           {mode === "pdf" && (
             <div className="space-y-4">
               <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors">
-                <div className="text-4xl mb-3">📄</div>
                 <div className="text-base font-medium text-slate-700 mb-1">Drop PDF files here</div>
                 <div className="text-sm text-slate-500">Extracts text into markdown files</div>
                 <input type="file" accept=".pdf" multiple onChange={(e) => setPdfFiles(Array.from(e.target.files || []))} className="hidden" id="pdf-upload" />
@@ -285,30 +258,15 @@ export function IngestTab() {
                   <span className="text-sm">Copy original PDF</span>
                 </label>
               </div>
-              <button
-                onClick={handleIngestPdf}
-                disabled={loading || !pdfFiles.length}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? "Extracting..." : "Extract PDF Text"}
-              </button>
+              <ActionButton onClick={handleIngestPdf} loading={loading} disabled={!pdfFiles.length} loadingText="Extracting...">
+                Extract PDF Text
+              </ActionButton>
             </div>
           )}
         </div>
       </div>
 
-      {result && (
-        <div className="bg-slate-800 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            {result.returncode === 0 ? (
-              <span className="text-green-400 text-sm">✓ Done</span>
-            ) : (
-              <span className="text-red-400 text-sm">✗ Failed (exit {result.returncode})</span>
-            )}
-          </div>
-          <pre className="text-xs text-slate-300 overflow-auto max-h-64">{result.output}</pre>
-        </div>
-      )}
+      <CommandResultPanel result={result} />
     </div>
   );
 }

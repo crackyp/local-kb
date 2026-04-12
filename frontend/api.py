@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -16,6 +17,14 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+# ---------------------------------------------------------------------------
+# Runtime config from environment
+# ---------------------------------------------------------------------------
+
+API_PORT = int(os.environ.get("KB_API_PORT", "8765"))
+FRONTEND_PORT = int(os.environ.get("KB_FRONTEND_PORT", "3737"))
+FRONTEND_HOST = os.environ.get("KB_FRONTEND_HOST", "localhost")
 
 # ---------------------------------------------------------------------------
 # Bootstrap: make local_kb and scripts/ importable
@@ -196,9 +205,16 @@ def _error_response(code: str, message: str, status: int = 500):
 
 app = FastAPI(title="Local KB API")
 
+_cors_origins = [
+    f"http://{FRONTEND_HOST}:{FRONTEND_PORT}",
+    f"http://127.0.0.1:{FRONTEND_PORT}",
+]
+if f"http://localhost:{FRONTEND_PORT}" not in _cors_origins:
+    _cors_origins.append(f"http://localhost:{FRONTEND_PORT}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -665,17 +681,24 @@ async def promote_output(data: PromoteRequest):
 
 @app.post("/api/correct")
 async def correct_answer(data: CorrectRequest):
+    from local_kb.paths import CORRECTIONS
+
     ensure_dirs()
     ts = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-    content = f"# Correction: {data.question}\n\n"
+    content = f"---\nquestion: {data.question}\ndate: {dt.datetime.now().isoformat()}\napplied: false\n---\n\n"
+    content += f"# Correction\n\n"
     content += f"> **Original question:** {data.question}\n\n"
     content += f"## Correct Information\n\n{data.correction}\n"
-    dst = RAW / f"correction-{ts}.md"
+    dst = CORRECTIONS / f"correction-{ts}.md"
     dst.write_text(content, encoding="utf-8")
+
+    # Also copy into raw/ so it gets compiled into the wiki
+    raw_dst = RAW / f"correction-{ts}.md"
+    raw_dst.write_text(content, encoding="utf-8")
 
     return CommandResponse(
         returncode=0,
-        output=f"Saved correction: raw/{dst.name}",
+        output=f"Saved correction: corrections/{dst.name}",
         recommendations=[
             Recommendation(
                 message="Correction saved. Recompile to update the wiki.",
@@ -726,7 +749,7 @@ async def api_health_check(data: HealthCheckRequest):
 @app.get("/api/files/{category}")
 async def list_files(category: str):
     if category == "raw":
-        files = scan_files(RAW)
+        files = [p for p in scan_files(RAW) if RAW_ASSETS not in p.parents]
         base = RAW
     elif category == "wiki":
         files = scan_files(WIKI, "*.md")
@@ -737,11 +760,48 @@ async def list_files(category: str):
     else:
         _error_response("INVALID_CATEGORY", f"Invalid category: {category}", 400)
 
+    # For wiki and outputs, attach a human title pulled from the article's
+    # first heading. Wiki uses the prebuilt index when available; fall back to
+    # reading the file's first non-empty line for both.
+    titles: dict[str, str] = {}
+    if category == "wiki":
+        from local_kb.paths import WIKI_INDEX_FILE
+        from local_kb.utils import load_json
+        try:
+            wiki_index = load_json(WIKI_INDEX_FILE, {})
+            for fname, entry in wiki_index.items():
+                if isinstance(entry, dict) and entry.get("title"):
+                    titles[fname] = entry["title"]
+        except Exception:
+            pass
+
+    def _read_title(p: Path) -> str | None:
+        try:
+            with open(p, "r", encoding="utf-8", errors="ignore") as fh:
+                for _ in range(20):
+                    line = fh.readline()
+                    if not line:
+                        break
+                    s = line.strip()
+                    if s.startswith("#"):
+                        return s.lstrip("# ").strip() or None
+                    if s:
+                        return s
+        except Exception:
+            return None
+        return None
+
     result = []
     for p in files:
         try:
             meta = file_meta(p)
             meta["rel"] = str(p.relative_to(base))
+            if category in ("wiki", "outputs") and p.suffix.lower() == ".md":
+                title = titles.get(p.name)
+                if not title:
+                    title = _read_title(p)
+                if title:
+                    meta["title"] = title
             result.append(meta)
         except Exception:
             continue
@@ -777,6 +837,9 @@ async def get_file(category: str, path: str):
 
 @app.delete("/api/file/{category}/{path:path}")
 async def delete_file(category: str, path: str):
+    from local_kb.index_state import remove_page_from_index, remove_page_from_wiki_index
+    from local_kb.audit import log_action
+
     if category == "raw":
         base = RAW
     elif category == "wiki":
@@ -791,12 +854,67 @@ async def delete_file(category: str, path: str):
         _error_response("FILE_NOT_FOUND", "File not found", 404)
 
     try:
-        file_path.unlink()
-        return {"success": True, "deleted": str(file_path)}
+        # Soft-delete: move to trash instead of permanent removal
+        from local_kb.safe_ops import soft_delete
+        trash_path = soft_delete(file_path, category)
+        log_action("delete", category, path)
+
+        # Clean up indexes when wiki pages are deleted
+        if category == "wiki" and file_path.name.endswith(".md"):
+            try:
+                remove_page_from_index(file_path.name)
+                remove_page_from_wiki_index(file_path.name)
+            except Exception:
+                pass  # non-fatal: index will catch up on next rebuild
+
+        return {"success": True, "deleted": str(file_path), "trash": str(trash_path)}
     except Exception as e:
         _error_response("DELETE_FAILED", str(e))
 
 
+# ---------------------------------------------------------------------------
+# Trash management
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/trash")
+async def list_trash(category: str | None = None):
+    from local_kb.safe_ops import list_trash as _list_trash
+    return {"files": _list_trash(category)}
+
+
+@app.post("/api/trash/restore")
+async def restore_trash(data: dict):
+    from local_kb.safe_ops import restore_from_trash
+    from local_kb.audit import log_action as _log
+
+    name = data.get("name", "")
+    category = data.get("category", "")
+    if not name or not category:
+        _error_response("MISSING_FIELDS", "name and category are required", 400)
+
+    try:
+        restored = restore_from_trash(name, category)
+        _log("restore", category, name, f"-> {restored}")
+        return {"success": True, "restored": str(restored)}
+    except FileNotFoundError as e:
+        _error_response("NOT_FOUND", str(e), 404)
+    except FileExistsError as e:
+        _error_response("ALREADY_EXISTS", str(e), 409)
+    except Exception as e:
+        _error_response("RESTORE_FAILED", str(e))
+
+
+@app.delete("/api/trash")
+async def empty_trash(category: str | None = None):
+    from local_kb.safe_ops import empty_trash as _empty_trash
+    from local_kb.audit import log_action as _log
+
+    removed = _empty_trash(category)
+    _log("empty_trash", category or "all", f"{removed} files")
+    return {"success": True, "removed": removed}
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=API_PORT)

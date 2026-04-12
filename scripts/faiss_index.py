@@ -175,10 +175,8 @@ def chunk_page(text: str, chunk_size: int = 800, overlap: int = 100) -> list:
 
 def _wiki_page_hashes() -> dict:
     """Return ``{page_name: sha256}`` for every wiki markdown file."""
-    hashes = {}
-    for p in sorted(WIKI.glob("*.md")):
-        hashes[p.name] = sha256_text(read_text(p))
-    return hashes
+    from local_kb.index_state import wiki_page_hashes
+    return wiki_page_hashes()
 
 
 def _full_build(cfg: dict, current_hashes: dict) -> dict:
@@ -517,20 +515,5 @@ def assemble_context(question: str, cfg: dict):
 
 def is_index_stale() -> bool:
     """Return True if the FAISS index is missing or out of date."""
-    if not FAISS_INDEX_FILE.exists() or not FAISS_STATE_FILE.exists():
-        return True
-
-    state = load_json(FAISS_STATE_FILE, {})
-    current = _wiki_page_hashes()
-    current.pop("INDEX.md", None)
-    fcfg = CFG["faiss"]
-
-    if state.get("pages", {}) != current:
-        return True
-    if state.get("embed_model") != fcfg["embed_model"]:
-        return True
-    if state.get("chunk_size") != fcfg["chunk_size"]:
-        return True
-    if state.get("chunk_overlap") != fcfg["chunk_overlap"]:
-        return True
-    return False
+    from local_kb.index_state import is_stale
+    return is_stale()

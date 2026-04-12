@@ -1,4 +1,4 @@
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8765";
 
 import type {
   StatusResponse,
@@ -12,6 +12,7 @@ import type {
   AskRequest,
   IndexRequest,
   HealthCheckRequest,
+  TrashItem,
 } from "@/types";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -154,8 +155,26 @@ export const api = {
     request<FileContentResponse>(`/api/file/${category}/${encodeURIComponent(path)}`),
 
   deleteFile: (category: "raw" | "wiki" | "outputs", path: string) =>
-    request<{ success: boolean; deleted: string }>(
+    request<{ success: boolean; deleted: string; trash?: string }>(
       `/api/file/${category}/${encodeURIComponent(path)}`,
+      { method: "DELETE" }
+    ),
+
+  listTrash: (category?: string) =>
+    request<{ files: TrashItem[] }>(
+      `/api/trash${category ? `?category=${category}` : ""}`
+    ),
+
+  restoreTrash: (name: string, category: string) =>
+    request<{ success: boolean; restored: string }>("/api/trash/restore", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, category }),
+    }),
+
+  emptyTrash: (category?: string) =>
+    request<{ success: boolean; removed: number }>(
+      `/api/trash${category ? `?category=${category}` : ""}`,
       { method: "DELETE" }
     ),
 };

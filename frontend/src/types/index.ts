@@ -7,6 +7,7 @@ export interface FileMeta {
   modified: number;
   modified_h: string;
   rel: string;
+  title?: string;
 }
 
 export interface OllamaStatus {
@@ -20,6 +21,7 @@ export interface StatusResponse {
     raw: number;
     wiki: number;
     outputs: number;
+    corrections?: number;
   };
   faiss: "ready" | "stale" | "not_built" | "not_installed" | "unavailable" | "unknown";
 }
@@ -91,4 +93,13 @@ export interface QaHistoryEntry {
   question: string;
   file: string;
   time: string;
+}
+
+export interface TrashItem {
+  name: string;
+  original_name: string;
+  category: string;
+  trashed_at: string;
+  size: number;
+  path: string;
 }
