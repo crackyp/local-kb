@@ -6,6 +6,12 @@ __pycache__/
 .DS_Store
 .vscode/
 .idea/
+.claude/worktrees/
+*.bak
+*.tmp
+*.orig
+*.rej
+*~
 
 # Local runtime artifacts (keep directory skeleton only)
 kb/raw/*

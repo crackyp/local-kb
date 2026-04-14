@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
 import { useStatus } from "@/lib/StatusContext";
+import { useCompile } from "@/lib/CompileContext";
 import type { CommandResponse } from "@/types";
 import {
   SectionCard,
@@ -14,13 +15,12 @@ import {
 
 export function CompileTab() {
   const { model, refresh: refreshStatus } = useStatus();
+  const { compiling, liveLines, result, startCompile, stopCompile } = useCompile();
   const [force, setForce] = useState(false);
   const [maxChars, setMaxChars] = useState(55000);
   const [chunking, setChunking] = useState(false);
   const [idxForce, setIdxForce] = useState(false);
-  const [result, setResult] = useState<CommandResponse | null>(null);
-  const [liveLines, setLiveLines] = useState<string[]>([]);
-  const [compiling, setCompiling] = useState(false);
+  const [indexResult, setIndexResult] = useState<CommandResponse | null>(null);
   const [indexing, setIndexing] = useState(false);
   const liveRef = useRef<HTMLPreElement>(null);
 
@@ -31,39 +31,25 @@ export function CompileTab() {
   }, [liveLines]);
 
   const handleCompile = async () => {
-    setCompiling(true);
-    setResult(null);
-    setLiveLines([]);
-    try {
-      const { promise } = api.compileStream(
-        { model, force, max_source_chars: maxChars, chunking },
-        (line) => setLiveLines((prev) => [...prev, line]),
-      );
-      const res = await promise;
-      setResult(res);
-      setLiveLines([]);
-      refreshStatus();
-    } catch (e) {
-      setResult({ returncode: 1, output: String(e), command: "" });
-      setLiveLines([]);
-    } finally {
-      setCompiling(false);
-    }
+    setIndexResult(null);
+    await startCompile({ model, force, max_source_chars: maxChars, chunking });
   };
 
   const handleBuildIndex = async () => {
     setIndexing(true);
-    setResult(null);
+    setIndexResult(null);
     try {
       const res = await api.buildIndex({ force: idxForce });
-      setResult(res);
+      setIndexResult(res);
       refreshStatus();
     } catch (e) {
-      setResult({ returncode: 1, output: String(e), command: "" });
+      setIndexResult({ returncode: 1, output: String(e), command: "" });
     } finally {
       setIndexing(false);
     }
   };
+
+  const displayResult = indexResult ?? result;
 
   return (
     <div className="space-y-6">
@@ -94,6 +80,14 @@ export function CompileTab() {
         <ActionButton onClick={handleCompile} loading={compiling} loadingText="Compiling...">
           Run Compile
         </ActionButton>
+        {compiling && (
+          <button
+            onClick={stopCompile}
+            className="ml-3 px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700"
+          >
+            Stop Compile
+          </button>
+        )}
       </SectionCard>
 
       <SectionCard title="FAISS Index">
@@ -117,11 +111,11 @@ export function CompileTab() {
         </div>
       )}
 
-      <CommandResultPanel result={result} />
+      <CommandResultPanel result={displayResult} />
 
-      {result?.recommendations && (
+      {displayResult?.recommendations && (
         <RecommendationBar
-          recommendations={result.recommendations}
+          recommendations={displayResult.recommendations}
           onAction={(rec) => {
             if (rec.action === "rebuild_index") handleBuildIndex();
           }}

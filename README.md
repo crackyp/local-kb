@@ -1,4 +1,4 @@
-# Local KB (Ollama + Obsidian)
+# Local KB (Ollama)
 
 A local-first personal knowledge base compiler.
 
@@ -25,7 +25,9 @@ local-kb/
     wiki/         # compiled wiki pages
     outputs/      # Q&A/report markdown outputs
     index/        # internal incremental state and indexes
-  frontend/       # Next.js web UI + FastAPI backend
+  backend/        # FastAPI server entrypoint/wiring
+  frontend/       # Next.js web UI
+  local_kb/       # shared backend/domain logic
   scripts/
     kb.py               # main CLI
     setup_mac.sh        # one-shot mac setup helper

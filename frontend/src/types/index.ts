@@ -28,6 +28,13 @@ export interface StatusResponse {
 
 export interface IngestUrlRequest {
   urls: string[];
+  crawl: boolean;
+  max_depth: number;
+  max_pages: number;
+  same_domain: boolean;
+  path_filter?: string | null;
+  respect_robots: boolean;
+  delay: number;
   download_images: boolean;
   max_images: number;
   timeout: number;

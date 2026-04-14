@@ -23,6 +23,52 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+function streamRequest(
+  path: string,
+  data: unknown,
+  onLine: (text: string) => void,
+): { promise: Promise<CommandResponse>; abort: () => void } {
+  const controller = new AbortController();
+  const promise = (async () => {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+    const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let result: CommandResponse | null = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const msg = JSON.parse(line.slice(6));
+        if (msg.type === "line") {
+          onLine(msg.text);
+        } else if (msg.type === "done") {
+          result = {
+            returncode: msg.returncode,
+            output: msg.output,
+            command: "",
+            recommendations: msg.recommendations,
+          };
+        }
+      }
+    }
+    return result || { returncode: 1, output: "Stream ended unexpectedly", command: "" };
+  })();
+
+  return { promise, abort: () => controller.abort() };
+}
+
 export const api = {
   getStatus: () => request<StatusResponse>("/api/status"),
 
@@ -49,6 +95,12 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  ingestUrlStream: (
+    data: IngestUrlRequest,
+    onLine: (text: string) => void,
+  ): { promise: Promise<CommandResponse>; abort: () => void } =>
+    streamRequest("/api/ingest/url/stream", data, onLine),
+
   ingestPdf: (files: File[], maxPages: number, copyOriginal: boolean) => {
     const form = new FormData();
     files.forEach((f) => form.append("files", f));
@@ -70,46 +122,8 @@ export const api = {
   compileStream: (
     data: CompileRequest,
     onLine: (text: string) => void,
-  ): { promise: Promise<CommandResponse>; abort: () => void } => {
-    const controller = new AbortController();
-    const promise = (async () => {
-      const res = await fetch(`${API_BASE}/api/compile/stream`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-        signal: controller.signal,
-      });
-      if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let result: CommandResponse | null = null;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const msg = JSON.parse(line.slice(6));
-          if (msg.type === "line") {
-            onLine(msg.text);
-          } else if (msg.type === "done") {
-            result = {
-              returncode: msg.returncode,
-              output: msg.output,
-              command: "",
-              recommendations: msg.recommendations,
-            };
-          }
-        }
-      }
-      return result || { returncode: 1, output: "Stream ended unexpectedly", command: "" };
-    })();
-    return { promise, abort: () => controller.abort() };
-  },
+  ): { promise: Promise<CommandResponse>; abort: () => void } =>
+    streamRequest("/api/compile/stream", data, onLine),
 
   buildIndex: (data: IndexRequest) =>
     request<CommandResponse>("/api/index", {

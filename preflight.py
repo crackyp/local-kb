@@ -25,6 +25,7 @@ REQUIRED_PYTHON_PACKAGES = [
     ("pypdf", "pypdf"),
     ("docx", "python-docx"),
     ("pydantic", "pydantic"),
+    ("bs4", "beautifulsoup4"),
 ]
 
 # Optional but recommended

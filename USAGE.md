@@ -72,7 +72,7 @@ npm run start -- --port 3000
 
 # In another terminal — run backend without --reload
 cd local-kb
-python -m uvicorn frontend.api:app --host 127.0.0.1 --port 8000
+python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
 ```
 
 ## Preflight Checks

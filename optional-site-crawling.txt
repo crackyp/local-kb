@@ -1,0 +1,142 @@
+Specification: Extend ingest-url with Optional Link-Following / Site CrawlingGoalKeep the existing single-URL ingest-url behavior unchanged (backward-compatible).
+Add an optional crawling mode so that when a page contains links, the tool automatically follows them, ingests their raw markdown content (and images if requested), and stores everything in kb/raw/ exactly like today.This turns ingest-url into a lightweight, controlled site crawler suitable for documentation sites, blogs, wikis, research pages, etc.1. CLI Interface (add to scripts/kb.py)Update the ingest-url command with these new flags (all optional):bash
+
+python3 scripts/kb.py ingest-url <starting_url> \
+  [--crawl] \
+  [--max-depth 3] \
+  [--max-pages 50] \
+  [--same-domain] \          # default: True (strongly recommended)
+  [--path-filter "<regex>"] \ # e.g. "^/docs/|^/blog/" 
+  [--respect-robots] \       # default: True
+  [--delay 1.0] \            # seconds between requests
+  [--download-images]        # existing flag, now applies to every page
+
+--crawl (flag): Enables recursive link following. If omitted → current single-page behavior only.
+--max-depth N: How many hops deep to go (default 3). Depth 0 = just the starting page.
+--max-pages N: Hard safety cap (default 50) to prevent accidental huge crawls.
+--same-domain: Only follow links that share the same domain as the starting URL.
+--path-filter: Optional regex applied to the path portion of the URL (useful to stay inside /docs/ or /articles/).
+--respect-robots: Fetch and obey robots.txt (skip disallowed paths).
+--delay: Politeness delay between requests.
+
+Example usage:bash
+
+# Crawl a whole documentation section (recommended)
+python3 scripts/kb.py ingest-url https://example.com/docs --crawl --max-depth 4 --max-pages 100 --same-domain
+
+# Just the single page (current behavior)
+python3 scripts/kb.py ingest-url https://example.com/docs/intro
+
+2. Core Algorithm (BFS Crawler)Implement in local_kb/ingest.py (or wherever the current ingest_url logic lives). Reuse your existing single-page ingestion as much as possible.Pseudocode (ready to hand to your coding assistant):python
+
+from collections import deque
+from urllib.parse import urljoin, urlparse, urlunparse
+import time
+import requests
+from bs4 import BeautifulSoup   # add to requirements.txt if not present
+
+def crawl_and_ingest(
+    start_url: str,
+    max_depth: int = 3,
+    max_pages: int = 50,
+    same_domain: bool = True,
+    path_filter: str | None = None,
+    respect_robots: bool = True,
+    delay: float = 1.0,
+    download_images: bool = False,
+) -> int:
+    visited = set()
+    queue = deque([(start_url, 0)])          # (url, depth)
+    ingested = 0
+    domain = urlparse(start_url).netloc
+
+    # Optional: load robots.txt once
+    robots_parser = None
+    if respect_robots:
+        robots_parser = load_robots_txt(start_url)  # helper you can implement
+
+    while queue and ingested < max_pages:
+        url, depth = queue.popleft()
+        if url in visited:
+            continue
+        visited.add(url)
+
+        # === Reuse your existing single-page ingestion ===
+        try:
+            markdown_content, image_urls = ingest_single_page(url)   # ← your current function
+            filename = generate_safe_filename(url)                   # e.g. slugified title or path
+            save_to_raw(markdown_content, filename, metadata={"original_url": url, "crawl_depth": depth})
+            
+            if download_images and image_urls:
+                save_images(image_urls, base_filename=filename)      # existing image logic, now per-page
+
+            ingested += 1
+            print(f"✅ Ingested [{depth}] {url} → {filename}")
+            
+        except Exception as e:
+            print(f"❌ Failed {url}: {e}")
+            continue
+
+        if depth >= max_depth:
+            continue
+
+        # === Extract & filter links ===
+        html = fetch_raw_html(url)                       # or reuse HTML from ingest_single_page if possible
+        soup = BeautifulSoup(html, "html.parser")
+        
+        for link_tag in soup.find_all("a", href=True):
+            href = link_tag["href"]
+            full_url = urljoin(url, href)
+            
+            # Clean URL (remove fragments, normalize)
+            parsed = urlparse(full_url)
+            clean_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", ""))
+            
+            # Filters
+            if clean_url in visited:
+                continue
+            if same_domain and urlparse(clean_url).netloc != domain:
+                continue
+            if path_filter and not re.match(path_filter, parsed.path):
+                continue
+            if respect_robots and robots_parser and not robots_parser.can_fetch(clean_url):
+                continue
+            if not is_html_link(clean_url):               # skip .pdf, .png, mailto:, etc. (or handle PDFs later)
+                continue
+
+            queue.append((clean_url, depth + 1))
+
+        time.sleep(delay)   # politeness
+
+    print(f"🎉 Finished. Ingested {ingested} pages.")
+    return ingested
+
+3. Helper Functions You’ll Need (or reuse)ingest_single_page(url) → your existing web → markdown + image extraction logic (do not change its internal behavior).
+fetch_raw_html(url) → returns full HTML (used only for link extraction; avoid duplicate fetch if you can pass HTML back from ingest_single_page).
+generate_safe_filename(url) → slugify title or URL path + .md. Handle collisions by appending -2, -3, etc.
+save_to_raw(markdown, filename, metadata) → existing save logic + optional YAML frontmatter for original URL and depth.
+is_html_link(url) → quick check that it’s not a file download, anchor, javascript:, etc.
+load_robots_txt(start_url) → simple requests.get to /robots.txt + robotexclusionrulesparser or a lightweight parser (optional dependency).
+
+4. Technical Notes & RecommendationsDependencies
+Add if missing:
+beautifulsoup4 (for link extraction)
+robotexclusionrulesparser (optional but nice)
+requests is almost certainly already in the project.
+Filename strategy (important for Obsidian)
+Use the page <title> (cleaned) or the URL path slug. Store original URL in YAML frontmatter so the compiler/linter can still reference it.
+Image handling
+Extend current image downloader to prefix filenames with the page slug (e.g., docs-introduction-figure1.png) to avoid collisions across pages.
+Performance / Safety  BFS queue prevents deep rabbit holes.  
+max_pages + max_depth are hard stops.  
+Visited set uses normalized URLs (no fragments).  
+Rate limiting via --delay.
+
+Limitations (be transparent in README)  JavaScript-heavy/SPA sites will only get the initial HTML (same as today).  
+No PDF auto-ingestion yet (future enhancement: if a link ends in .pdf, optionally call ingest-pdf).  
+No sitemap.xml parsing in v1 (can be added later for faster discovery).
+
+Where to implement  Add CLI parsing in scripts/kb.py.  
+Put the crawler in local_kb/ingest.py (or create local_kb/crawler.py and import).  
+Update any FastAPI endpoint used by the Next.js UI (if it exposes ingest-url).
+

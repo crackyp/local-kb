@@ -24,8 +24,8 @@ FRONTEND_PORT = os.environ.get("KB_FRONTEND_PORT", "3737")
 def start_api():
     print(f"\n[1/2] Starting FastAPI backend on http://127.0.0.1:{API_PORT} ...")
     subprocess.run(
-        [sys.executable, "-m", "uvicorn", "api:app", "--reload", "--port", API_PORT],
-        cwd=FRONTEND,
+        [sys.executable, "-m", "uvicorn", "backend.app:app", "--reload", "--port", API_PORT],
+        cwd=ROOT,
         env={**os.environ, "KB_API_PORT": API_PORT, "KB_FRONTEND_PORT": FRONTEND_PORT},
     )
 

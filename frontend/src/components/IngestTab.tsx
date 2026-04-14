@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useStatus } from "@/lib/StatusContext";
+import type { CommandResponse } from "@/types";
 import { CommandResultPanel, ActionButton } from "@/components/shared";
 
 type IngestMode = "files" | "url" | "pdf";
@@ -24,17 +25,33 @@ export function IngestTab() {
 
   // URL state
   const [urls, setUrls] = useState("");
+  const [crawl, setCrawl] = useState(false);
+  const [maxDepth, setMaxDepth] = useState(3);
+  const [maxPages, setMaxPages] = useState(50);
+  const [sameDomain, setSameDomain] = useState(true);
+  const [pathFilter, setPathFilter] = useState("");
+  const [respectRobots, setRespectRobots] = useState(true);
+  const [crawlDelay, setCrawlDelay] = useState(1.0);
   const [downloadImages, setDownloadImages] = useState(false);
   const [maxImages, setMaxImages] = useState(20);
   const [urlTimeout, setUrlTimeout] = useState(30);
 
   // PDF state
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
-  const [maxPages, setMaxPages] = useState(0);
+  const [pdfMaxPages, setPdfMaxPages] = useState(0);
   const [copyOriginal, setCopyOriginal] = useState(false);
 
-  const [result, setResult] = useState<{ returncode: number; output: string } | null>(null);
+  const [result, setResult] = useState<CommandResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [urlFetching, setUrlFetching] = useState(false);
+  const [liveLines, setLiveLines] = useState<string[]>([]);
+  const liveRef = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    if (liveRef.current) {
+      liveRef.current.scrollTop = liveRef.current.scrollHeight;
+    }
+  }, [liveLines]);
 
   const addFiles = (files: File[]) => {
     setUploadFiles((prev) => {
@@ -63,7 +80,7 @@ export function IngestTab() {
     withRefresh(async () => {
       if (!uploadFiles.length) return;
       const res = await api.ingestUpload(uploadFiles);
-      setResult({ returncode: 0, output: `Uploaded ${res.count} file(s):\n${res.saved.map((s) => `  ${s.name} (${(s.size / 1024).toFixed(1)} KB)`).join("\n")}` });
+      setResult({ returncode: 0, output: `Uploaded ${res.count} file(s):\n${res.saved.map((s) => `  ${s.name} (${(s.size / 1024).toFixed(1)} KB)`).join("\n")}`, command: "" });
       setUploadFiles([]);
     });
 
@@ -88,17 +105,48 @@ export function IngestTab() {
       setResult(await api.ingestPath(lines));
     });
 
-  const handleIngestUrl = () =>
-    withRefresh(async () => {
-      const lines = urls.split("\n").map((l) => l.trim()).filter(Boolean);
-      if (!lines.length) return;
-      setResult(await api.ingestUrl({ urls: lines, download_images: downloadImages, max_images: maxImages, timeout: urlTimeout }));
-    });
+  const handleIngestUrl = async () => {
+    const lines = urls.split("\n").map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) return;
+
+    setLoading(true);
+    setUrlFetching(true);
+    setResult(null);
+    setLiveLines([]);
+    try {
+      const { promise } = api.ingestUrlStream(
+        {
+        urls: lines,
+        crawl,
+        max_depth: maxDepth,
+        max_pages: maxPages,
+        same_domain: sameDomain,
+        path_filter: pathFilter.trim() || null,
+        respect_robots: respectRobots,
+        delay: crawlDelay,
+        download_images: downloadImages,
+        max_images: maxImages,
+        timeout: urlTimeout,
+        },
+        (line) => setLiveLines((prev) => [...prev, line]),
+      );
+      const res = await promise;
+      setResult(res);
+      setLiveLines([]);
+      refreshStatus();
+    } catch (e) {
+      setResult({ returncode: 1, output: String(e), command: "" });
+      setLiveLines([]);
+    } finally {
+      setUrlFetching(false);
+      setLoading(false);
+    }
+  };
 
   const handleIngestPdf = () =>
     withRefresh(async () => {
       if (!pdfFiles.length) return;
-      setResult(await api.ingestPdf(pdfFiles, maxPages, copyOriginal));
+      setResult(await api.ingestPdf(pdfFiles, pdfMaxPages, copyOriginal));
       setPdfFiles([]);
     });
 
@@ -206,7 +254,11 @@ export function IngestTab() {
                 placeholder="https://example.com&#10;https://arxiv.org/abs/..."
                 className="w-full h-28 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={crawl} onChange={(e) => setCrawl(e.target.checked)} className="rounded" />
+                  <span className="text-sm">Enable crawling</span>
+                </label>
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={downloadImages} onChange={(e) => setDownloadImages(e.target.checked)} className="rounded" />
                   <span className="text-sm">Download images</span>
@@ -220,8 +272,44 @@ export function IngestTab() {
                   <input type="number" min={5} max={300} value={urlTimeout} onChange={(e) => setUrlTimeout(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm" />
                 </div>
               </div>
+              {crawl && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+                  <div>
+                    <div className="text-sm font-medium text-slate-800">Crawler controls</div>
+                    <div className="text-xs text-slate-500 mt-1">Breadth-first crawl with safety caps. Depth 0 means only the starting page.</div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div>
+                      <label className="text-xs text-slate-500">Max depth</label>
+                      <input type="number" min={0} max={20} value={maxDepth} onChange={(e) => setMaxDepth(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm bg-white" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500">Max pages</label>
+                      <input type="number" min={1} max={5000} value={maxPages} onChange={(e) => setMaxPages(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm bg-white" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500">Delay (sec)</label>
+                      <input type="number" min={0} max={60} step={0.1} value={crawlDelay} onChange={(e) => setCrawlDelay(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm bg-white" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500">Path filter regex</label>
+                      <input type="text" value={pathFilter} onChange={(e) => setPathFilter(e.target.value)} placeholder="^/docs/|^/blog/" className="w-full mt-1 px-2 py-1 border rounded text-sm bg-white" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={sameDomain} onChange={(e) => setSameDomain(e.target.checked)} className="rounded" />
+                      <span className="text-sm">Stay on same domain</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={respectRobots} onChange={(e) => setRespectRobots(e.target.checked)} className="rounded" />
+                      <span className="text-sm">Respect robots.txt</span>
+                    </label>
+                  </div>
+                </div>
+              )}
               <ActionButton onClick={handleIngestUrl} loading={loading} disabled={!urls.trim()} loadingText="Fetching...">
-                Ingest URL(s)
+                {crawl ? "Ingest and Crawl URL(s)" : "Ingest URL(s)"}
               </ActionButton>
             </div>
           )}
@@ -251,7 +339,7 @@ export function IngestTab() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-slate-500">Max pages (0 = all)</label>
-                  <input type="number" min={0} max={5000} value={maxPages} onChange={(e) => setMaxPages(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm" />
+                  <input type="number" min={0} max={5000} value={pdfMaxPages} onChange={(e) => setPdfMaxPages(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm" />
                 </div>
                 <label className="flex items-center gap-2 pt-5">
                   <input type="checkbox" checked={copyOriginal} onChange={(e) => setCopyOriginal(e.target.checked)} className="rounded" />
@@ -265,6 +353,17 @@ export function IngestTab() {
           )}
         </div>
       </div>
+
+      {urlFetching && liveLines.length > 0 && (
+        <div className="bg-slate-800 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-blue-400 text-sm animate-pulse">
+              {crawl ? "Fetching and crawling..." : "Fetching..."}
+            </span>
+          </div>
+          <pre ref={liveRef} className="text-xs text-slate-300 overflow-auto max-h-64">{liveLines.join("\n")}</pre>
+        </div>
+      )}
 
       <CommandResultPanel result={result} />
     </div>

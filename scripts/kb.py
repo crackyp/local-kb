@@ -11,14 +11,28 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+
+def _configure_stdio():
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name, None)
+        if stream is None or not hasattr(stream, "reconfigure"):
+            continue
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except Exception:
+            continue
+
+
+_configure_stdio()
+
 from local_kb.config import CFG
 from local_kb.paths import RAW, RAW_ASSETS, WIKI, OUTPUTS, ensure_dirs
 from local_kb.utils import (
     slugify, unique_path, read_text, resolve_input_patterns,
     ping_ollama, ollama_generate, truncate_at_sentence,
 )
-from local_kb.extract import extract_pdf_text, extract_docx_text, html_to_markdown
-from local_kb.ingest import fetch_url, decode_bytes, url_to_filename, download_image
+from local_kb.extract import extract_pdf_text, extract_docx_text
+from local_kb.ingest import ingest_urls, format_ingest_report
 from local_kb.compile import compile_documents, build_wiki_index
 from local_kb.retrieval import relevant_pages
 from local_kb.lint import lint_wiki
@@ -48,73 +62,21 @@ def cmd_ingest(args):
 
 def cmd_ingest_url(args):
     ensure_dirs()
-    added = 0
-    failed_urls = []
-    failed_images = []
-
-    for input_url in args.urls:
-        url = input_url.strip()
-        import re
-        if not re.match(r"^https?://", url, flags=re.IGNORECASE):
-            url = "https://" + url
-
-        try:
-            content, ctype = fetch_url(url, timeout=args.timeout)
-        except Exception as e:
-            print(f"! Failed {url}: {e}")
-            failed_urls.append((url, str(e)))
-            continue
-
-        text = decode_bytes(content, ctype)
-        if "html" in ctype.lower() or "<html" in text.lower():
-            title, markdown, image_urls = html_to_markdown(url, text)
-        else:
-            title = url
-            markdown = f"""# {url}
-
-Source URL: {url}
-Fetched: {dt.datetime.now().isoformat()}
-Content-Type: {ctype or 'unknown'}
-
-## Content
-
-{text[:CFG["ingest"]["max_content_chars"]]}
-"""
-            image_urls = []
-
-        out_name = url_to_filename(url)
-        out_path = unique_path(RAW / out_name)
-
-        image_notes = ""
-        if args.download_images and image_urls:
-            img_dir = RAW_ASSETS / out_path.stem
-            img_dir.mkdir(parents=True, exist_ok=True)
-            downloaded = []
-            for i, img_url in enumerate(image_urls[: args.max_images], start=1):
-                try:
-                    name = download_image(img_url, img_dir, i, timeout=args.timeout)
-                    downloaded.append(name)
-                except Exception as e:
-                    failed_images.append((img_url, str(e)))
-                    continue
-
-            if downloaded:
-                refs = "\n".join([f"- ![](assets/{out_path.stem}/{n})" for n in downloaded])
-                image_notes = f"\n\n## Downloaded Images\n\n{refs}\n"
-
-        out_path.write_text(markdown.strip() + image_notes + "\n", encoding="utf-8")
-        added += 1
-        print(f"+ {out_path} ({title[:70]})")
-
-    print(f"URL ingest complete. Added {added} page(s).")
-    if failed_urls:
-        print(f"\nFailed URLs ({len(failed_urls)}):")
-        for url, err in failed_urls:
-            print(f"  - {url}: {err}")
-    if failed_images:
-        print(f"\nFailed image downloads ({len(failed_images)}):")
-        for img_url, err in failed_images[:20]:
-            print(f"  - {img_url}: {err}")
+    result = ingest_urls(
+        args.urls,
+        download_images=args.download_images,
+        max_images=args.max_images,
+        timeout=args.timeout,
+        crawl=args.crawl,
+        max_depth=args.max_depth,
+        max_pages=args.max_pages,
+        same_domain=args.same_domain,
+        path_filter=args.path_filter,
+        respect_robots=args.respect_robots,
+        delay=args.delay,
+        progress=print,
+    )
+    print(format_ingest_report(result, include_added=False))
 
 
 def cmd_ingest_pdf(args):
@@ -303,6 +265,23 @@ def build_parser():
 
     p_ingest_url = sub.add_parser("ingest-url", help="Fetch URLs and save as markdown in kb/raw")
     p_ingest_url.add_argument("urls", nargs="+", help="One or more URLs")
+    p_ingest_url.add_argument("--crawl", action="store_true", help="Follow links recursively from each starting URL")
+    p_ingest_url.add_argument("--max-depth", type=int, default=3, help="Maximum crawl depth (depth 0 = only the starting page)")
+    p_ingest_url.add_argument("--max-pages", type=int, default=50, help="Maximum pages to ingest per starting URL when crawling")
+    p_ingest_url.add_argument(
+        "--same-domain",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Only follow links on the same domain as the starting URL (default: true)",
+    )
+    p_ingest_url.add_argument("--path-filter", default=None, help="Optional regex applied to the URL path when crawling")
+    p_ingest_url.add_argument(
+        "--respect-robots",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Obey robots.txt while crawling (default: true)",
+    )
+    p_ingest_url.add_argument("--delay", type=float, default=1.0, help="Delay between crawl requests in seconds")
     p_ingest_url.add_argument("--download-images", action="store_true", help="Download referenced images")
     p_ingest_url.add_argument("--max-images", type=int, default=20)
     p_ingest_url.add_argument("--timeout", type=int, default=30)

@@ -2,6 +2,7 @@
 
 import type { View } from "@/types";
 import { useStatus } from "@/lib/StatusContext";
+import { useCompile } from "@/lib/CompileContext";
 import { StatusBadge, ModelSelect } from "@/components/shared";
 
 const NAV_ITEMS: { id: View; label: string }[] = [
@@ -19,6 +20,7 @@ interface SidebarProps {
 
 export function Sidebar({ activeView, onNavigate }: SidebarProps) {
   const { status, refresh } = useStatus();
+  const { compiling, stopCompile } = useCompile();
 
   return (
     <aside className="w-56 min-h-screen bg-slate-900 text-slate-100 flex flex-col">
@@ -60,6 +62,27 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
           <div className="text-xs text-slate-400 uppercase tracking-wide mb-1">FAISS Index</div>
           <StatusBadge value={status?.faiss ?? "unknown"} />
         </div>
+
+        {compiling && (
+          <div className="p-3 rounded-lg bg-blue-950/60 border border-blue-800">
+            <div className="text-xs text-blue-300 uppercase tracking-wide mb-1">Compile Job</div>
+            <div className="text-sm text-blue-100 mb-3">Running in background while you browse.</div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => onNavigate("compile")}
+                className="flex-1 px-3 py-2 bg-blue-700 hover:bg-blue-600 rounded-lg text-sm transition-colors"
+              >
+                Open
+              </button>
+              <button
+                onClick={stopCompile}
+                className="px-3 py-2 bg-red-700 hover:bg-red-600 rounded-lg text-sm transition-colors"
+              >
+                Stop
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="border-t border-slate-700 pt-3 space-y-2">
           <div className="flex justify-between text-sm">
