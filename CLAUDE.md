@@ -11,8 +11,10 @@ local-kb/
   scripts/
     kb.py              # CLI entry point (all commands)
     faiss_index.py     # FAISS semantic indexing (chunking, embedding, search)
+  local_kb/            # Core Python package (compile, ingest, retrieval, health, etc.)
+  backend/
+    app.py             # FastAPI backend (default port 8765), wraps CLI as subprocess
   frontend/
-    api.py             # FastAPI backend (port 8000), wraps CLI as subprocess
     src/
       app/page.tsx     # Main page (tab router)
       components/      # AskTab, CompileTab, IngestTab, ExplorerTab, QualityTab, Sidebar
@@ -70,7 +72,7 @@ Key settings:
 
 ## Important Patterns
 
-- The backend (`frontend/api.py`) wraps CLI commands via `subprocess.run`. It does not call Python functions directly.
+- The backend (`backend/app.py`) wraps CLI commands via `subprocess.run`. It does not call Python functions directly.
 - API responses include a `recommendations` array — context-aware suggestions for what to do next. The frontend renders these as actionable buttons.
 - FAISS index uses `IndexIDMap` for incremental updates (add/remove vectors without full rebuild).
 - PDF extraction tries pypdf first, falls back to OCR (pymupdf + easyocr) for scanned/image PDFs.

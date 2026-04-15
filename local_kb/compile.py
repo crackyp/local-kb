@@ -444,8 +444,9 @@ def compile_documents(
         changed_wiki_pages.add(out_path.name)
         compiled_now += 1
 
-    save_json(STATE_FILE, state)
-    save_json(DOC_INDEX_FILE, docs_index)
+        # Persist after every doc so interrupted compiles don't leak orphans.
+        save_json(STATE_FILE, state)
+        save_json(DOC_INDEX_FILE, docs_index)
 
     if compiled_now > 0:
         build_wiki_index(None if force else changed_wiki_pages)
