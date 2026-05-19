@@ -1,42 +1,27 @@
 """Centralized status logic for local-kb.
 
-Single source of truth for file counts, Ollama availability, model list,
+Single source of truth for file counts, llama.cpp availability, model list,
 and FAISS index state.  Used by both the API and CLI.
 """
 
-import json
-import urllib.request
 from pathlib import Path
 from typing import List
 
-from .config import CFG
 from .paths import RAW, RAW_ASSETS, WIKI, OUTPUTS, CORRECTIONS, ensure_dirs
 from .index_state import status_label as faiss_status_label
+from . import llamacpp
 
 
 # ---------------------------------------------------------------------------
-# Ollama
+# llama.cpp
 # ---------------------------------------------------------------------------
 
-def ollama_is_running() -> bool:
-    try:
-        req = urllib.request.Request(CFG["ollama"]["url"] + "/", method="GET")
-        with urllib.request.urlopen(req, timeout=3):
-            return True
-    except Exception:
-        return False
+def llamacpp_is_running() -> bool:
+    return llamacpp.is_ready()
 
 
-def ollama_models() -> List[str]:
-    try:
-        req = urllib.request.Request(
-            CFG["ollama"]["url"] + "/api/tags", method="GET"
-        )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return [m["name"] for m in data.get("models", [])]
-    except Exception:
-        return []
+def llamacpp_models() -> List[str]:
+    return llamacpp.list_models()
 
 
 # ---------------------------------------------------------------------------
@@ -60,10 +45,11 @@ def _count_files(directory: Path, pattern: str = "**/*", exclude: list[Path] | N
 # ---------------------------------------------------------------------------
 
 def get_status() -> dict:
-    """Return full system status dict (Ollama, file counts, FAISS)."""
+    """Return full system status dict (llama.cpp, file counts, FAISS)."""
     ensure_dirs()
-    alive = ollama_is_running()
-    models = ollama_models() if alive else []
+    alive = llamacpp_is_running()
+    models = llamacpp_models()
+    loaded = llamacpp.loaded_model() if alive else None
 
     try:
         faiss = faiss_status_label()
@@ -71,7 +57,7 @@ def get_status() -> dict:
         faiss = "unavailable"
 
     return {
-        "ollama": {"running": alive, "models": models},
+        "llamacpp": {"running": alive, "models": models, "loaded": loaded},
         "files": {
             "raw": _count_files(RAW, exclude=[RAW_ASSETS]),
             "wiki": _count_files(WIKI, "*.md"),

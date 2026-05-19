@@ -4,7 +4,10 @@
 
 - Python 3.11+ with packages: `pip install -r requirements.txt`
 - Node.js 18+ (for the web UI)
-- Ollama running locally (`ollama serve`)
+- `llama-server.exe` from llama.cpp (default location: `H:\llama.cpp\llama-server.exe`)
+- At least one chat-model GGUF and one embed-model GGUF reachable by tag (see `kb.toml` `[llamacpp.external_gguf_map]` or the Ollama blob store at `H:\ollama\models`)
+
+By default the app spawns llama-server processes automatically: one for chat on port 8080 (model-swappable) and one for embeddings on port 8081 (fixed model). Set `[llamacpp] auto_spawn = false` in `kb.toml` to manage them yourself.
 
 ## Environment Variables
 
@@ -13,8 +16,10 @@
 | `KB_API_PORT` | `8000` | FastAPI backend port |
 | `KB_FRONTEND_PORT` | `3000` | Next.js dev server port |
 | `KB_FRONTEND_HOST` | `localhost` | Hostname used in CORS origins |
+| `LLAMACPP_DIR` | `H:\llama.cpp` | Directory containing `llama-server.exe` (used when `[llamacpp] server_exe` is empty) |
+| `OLLAMA_MODELS` | `H:\ollama\models` | Ollama blob store used to resolve tags that aren't in `external_gguf_map` |
 
-Set these before launching to change ports. The frontend reads `NEXT_PUBLIC_API_BASE` (set automatically by the startup scripts).
+Set these before launching to change defaults. The frontend reads `NEXT_PUBLIC_API_BASE` (set automatically by the startup scripts).
 
 ## Mode 1: CLI Only
 
@@ -46,7 +51,7 @@ python start-ui.py
 start-ui.bat
 ```
 
-Both scripts run preflight checks first (Python deps, node_modules, ports, Ollama). If checks fail you can still continue.
+Both scripts run preflight checks first (Python deps, node_modules, ports, llama-server). If checks fail you can still continue.
 
 To use non-default ports:
 ```bash
@@ -83,4 +88,4 @@ Run checks independently at any time:
 python preflight.py
 ```
 
-Checks: Python deps, node_modules, port availability, Ollama reachability.
+Checks: Python deps, node_modules, port availability, llama-server reachability (or that `llama-server.exe` is available for auto-spawn).

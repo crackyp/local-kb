@@ -37,15 +37,16 @@ from local_kb.config import CFG
 from local_kb.paths import RAW, RAW_ASSETS, WIKI, OUTPUTS, ensure_dirs
 from local_kb.utils import (
     slugify, unique_path, read_text, resolve_input_patterns,
-    truncate_at_sentence, ping_ollama, ollama_generate,
+    truncate_at_sentence,
 )
+from local_kb.llamacpp import ping as ping_llamacpp, generate as llamacpp_generate
 from local_kb.extract import extract_pdf_text
 from local_kb.ingest import ingest_urls, format_ingest_report
 from local_kb.compile import compile_documents
 from local_kb.retrieval import relevant_pages
 from local_kb.lint import lint_wiki
 from local_kb.health import health_check
-from local_kb.status import get_status, ollama_models
+from local_kb.status import get_status, llamacpp_models
 
 # Needed only for streaming compile (still subprocess-based)
 CLI_PATH = ROOT / "scripts" / "kb.py"
@@ -85,7 +86,6 @@ class CompileRequest(BaseModel):
     model: str = CFG["model"]["default"]
     force: bool = False
     max_source_chars: Optional[int] = None
-    chunking: bool = False
 
 
 class AskRequest(BaseModel):
@@ -93,6 +93,21 @@ class AskRequest(BaseModel):
     model: str = CFG["model"]["default"]
     limit: int = 6
     use_faiss: bool = True
+
+
+class ChatMessage(BaseModel):
+    role: str
+    content: Optional[str] = None
+    tool_call_id: Optional[str] = None
+    name: Optional[str] = None
+    tool_calls: Optional[list] = None
+
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage]
+    model: str = CFG["model"]["default"]
+    temperature: float = 0.3
+    max_iters: int = 10
 
 
 class IndexRequest(BaseModel):
@@ -111,6 +126,10 @@ class CorrectRequest(BaseModel):
 
 class HealthCheckRequest(BaseModel):
     model: str = CFG["model"]["default"]
+
+
+class LoadModelRequest(BaseModel):
+    model: str
 
 
 # ---------------------------------------------------------------------------
@@ -417,7 +436,6 @@ async def api_compile(data: CompileRequest):
             model=data.model,
             force=data.force,
             max_source_chars=data.max_source_chars,
-            chunking=data.chunking,
         )
     except RuntimeError as e:
         _error_response("COMPILE_FAILED", str(e))
@@ -461,8 +479,6 @@ async def compile_stream(data: CompileRequest):
         args.append("--force")
     if data.max_source_chars is not None:
         args.extend(["--max-source-chars", str(data.max_source_chars)])
-    if data.chunking:
-        args.append("--chunking")
 
     cmd = [sys.executable, "-u", str(CLI_PATH), *args]
 
@@ -522,8 +538,12 @@ async def compile_stream(data: CompileRequest):
 @app.post("/api/index")
 async def build_index(data: IndexRequest):
     ensure_dirs()
-    if not ping_ollama():
-        _error_response("OLLAMA_NOT_RUNNING", "Ollama is not running. Start it with: ollama serve")
+    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+        _error_response(
+            "LLAMACPP_NOT_RUNNING",
+            "llama-server is not running and auto_spawn is disabled. "
+            "Start it manually or enable [llamacpp] auto_spawn in kb.toml.",
+        )
 
     try:
         from faiss_index import faiss_available, build_faiss_index
@@ -556,12 +576,16 @@ async def build_index(data: IndexRequest):
 @app.post("/api/ask")
 async def ask_wiki(data: AskRequest):
     ensure_dirs()
-    if not ping_ollama():
-        _error_response("OLLAMA_NOT_RUNNING", "Ollama is not running. Start it with: ollama serve")
+    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+        _error_response(
+            "LLAMACPP_NOT_RUNNING",
+            "llama-server is not running and auto_spawn is disabled. "
+            "Start it manually or enable [llamacpp] auto_spawn in kb.toml.",
+        )
 
-    models = ollama_models()
-    if data.model not in models:
-        _error_response("MODEL_NOT_FOUND", f"model '{data.model}' not found", 404)
+    models = llamacpp_models()
+    if models and data.model not in models:
+        _error_response("MODEL_NOT_FOUND", f"model '{data.model}' not configured in kb.toml", 404)
 
     context = None
     output_lines = []
@@ -610,7 +634,7 @@ Question: {data.question}
 WIKI CONTEXT:
 {context}
 """
-    answer = ollama_generate(prompt, model=data.model, temperature=CFG["ask"]["temperature"])
+    answer = llamacpp_generate(prompt, model=data.model, temperature=CFG["ask"]["temperature"])
 
     import datetime as _dt
     ts = _dt.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -635,6 +659,33 @@ WIKI CONTEXT:
         written_file=out_path.name,
         recommendations=recommendations,
     ).model_dump()
+
+
+# ---------------------------------------------------------------------------
+# Chat (agent with filesystem + wiki tools)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/chat/stream")
+async def chat_stream(data: ChatRequest):
+    from local_kb.agent import chat_stream as _chat_stream
+
+    history = [m.model_dump(exclude_none=True) for m in data.messages]
+
+    def generate():
+        try:
+            for event in _chat_stream(
+                history,
+                model=data.model,
+                temperature=data.temperature,
+                max_iters=data.max_iters,
+            ):
+                yield f"data: {json.dumps(event)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 # ---------------------------------------------------------------------------
@@ -736,6 +787,28 @@ async def correct_answer(data: CorrectRequest):
 # ---------------------------------------------------------------------------
 # Health check
 # ---------------------------------------------------------------------------
+
+
+@app.post("/api/load-model")
+async def api_load_model(data: LoadModelRequest):
+    """Force llama-swap to swap to *model* by sending a minimal completion.
+
+    With llama-swap fronting llama.cpp, the actual model swap only happens when
+    a request arrives — selecting a model in the UI is meaningless until then.
+    This endpoint fires a 1-token completion to trigger the swap explicitly so
+    the "loaded:" status line matches what the user picked.
+    """
+    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+        _error_response(
+            "LLAMACPP_NOT_RUNNING",
+            "llama-server is not running and auto_spawn is disabled.",
+            503,
+        )
+    try:
+        llamacpp_generate("ok", model=data.model, temperature=0.0)
+    except RuntimeError as e:
+        _error_response("LOAD_FAILED", str(e))
+    return {"ok": True, "model": data.model}
 
 
 @app.post("/api/health-check")

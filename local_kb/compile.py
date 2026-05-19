@@ -1,26 +1,38 @@
-"""Compile pipeline: raw sources -> wiki pages."""
+"""Compile pipeline: raw sources -> wiki pages (iterative-incremental).
+
+For each changed raw file we:
+  1. Find the most-similar existing wiki pages via FAISS.
+  2. Send the new source + those pages to the LLM and ask it to decide
+     whether to update an existing page, merge several, or create a new one.
+  3. Apply the resulting writes (and soft-delete any redundant pages).
+
+The LLM never sees the whole corpus, so the flow scales regardless of how
+big kb/raw/ or kb/wiki/ grow. Periodic global reorganization is handled
+out-of-band (chat agent or a future `reconcile` command).
+"""
 
 import datetime as dt
+import json
 import re
 from pathlib import Path
 
 from .config import CFG
-from .paths import RAW, WIKI, INDEX, STATE_FILE, DOC_INDEX_FILE, WIKI_INDEX_FILE, ensure_dirs
+from .paths import RAW, WIKI, STATE_FILE, DOC_INDEX_FILE, WIKI_INDEX_FILE, ensure_dirs
 from .utils import (
-    load_json, save_json, slugify, unique_path, read_text, sha256_text,
+    load_json, save_json, slugify, read_text, sha256_text,
     extract_links, truncate_at_sentence, should_compile_file,
-    ping_ollama, ollama_generate,
 )
-from .extract import extract_pdf_text, extract_docx_text
+from .llamacpp import ping as ping_llamacpp, generate as llamacpp_generate
+from .extract import extract_pdf_text, extract_docx_text, extract_pptx_text
+from .safe_ops import soft_delete
 
 
 # ---------------------------------------------------------------------------
-# Wiki index
+# Wiki index (filesystem -> wiki_index.json + INDEX.md)
 # ---------------------------------------------------------------------------
 
 
 def _index_wiki_page(path: Path) -> dict:
-    """Extract index metadata for a single wiki page."""
     text = read_text(path)
     links = extract_links(text)
     first = ""
@@ -37,7 +49,6 @@ def _index_wiki_page(path: Path) -> dict:
 
 
 def _write_index_md(index: dict):
-    """Write wiki/INDEX.md from the index dict."""
     if not index:
         idx_path = WIKI / "INDEX.md"
         if idx_path.exists():
@@ -46,17 +57,12 @@ def _write_index_md(index: dict):
     lines = ["# Wiki Index", f"\n{len(index)} topics\n"]
     for fname in sorted(index):
         title = index[fname]["title"]
-        lines.append(f"- [[{fname}]] — {title}")
+        lines.append(f"- [{title}]({fname})")
     (WIKI / "INDEX.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def build_wiki_index(changed_pages: set | None = None):
-    """Build or incrementally update the wiki index.
-
-    If *changed_pages* is provided (set of wiki filenames), only those pages
-    are re-read.  Pages in the index that no longer exist on disk are pruned.
-    If *changed_pages* is None, a full rebuild is performed.
-    """
+    """Build or incrementally update the wiki index from the filesystem."""
     index = load_json(WIKI_INDEX_FILE, {}) if changed_pages is not None else {}
 
     if changed_pages is None:
@@ -81,217 +87,181 @@ def build_wiki_index(changed_pages: set | None = None):
 
 
 # ---------------------------------------------------------------------------
-# docs.json integrity
+# docs.json (raw -> sha tracking only; no longer 1:1 wiki mapping)
 # ---------------------------------------------------------------------------
 
 
 def validate_docs_index() -> dict:
-    """Validate docs.json against the filesystem and clean up orphans.
-
-    Returns ``{"removed_sources": [...], "removed_wikis": [...], "valid": int}``.
-    """
+    """Drop docs.json entries whose raw source no longer exists."""
     docs_index = load_json(DOC_INDEX_FILE, {})
     state = load_json(STATE_FILE, {"compiled": {}})
     removed_sources = []
-    removed_wikis = []
 
     for rel_name in list(docs_index):
-        entry = docs_index[rel_name]
-
-        # Handle legacy format where value was a plain string
-        if isinstance(entry, str):
-            del docs_index[rel_name]
-            state["compiled"].pop(rel_name, None)
+        if not (RAW / rel_name).exists():
             removed_sources.append(rel_name)
-            continue
-
-        source_path = RAW / rel_name
-        wiki_page = entry.get("wiki_page", "")
-        wiki_path = WIKI / wiki_page if wiki_page else None
-
-        # Source no longer exists — remove the mapping
-        if not source_path.exists():
-            removed_sources.append(rel_name)
-            del docs_index[rel_name]
-            state["compiled"].pop(rel_name, None)
-            continue
-
-        # Wiki page no longer exists — clear the mapping so it recompiles
-        if wiki_path and not wiki_path.exists():
-            removed_wikis.append(wiki_page)
             del docs_index[rel_name]
             state["compiled"].pop(rel_name, None)
 
     save_json(DOC_INDEX_FILE, docs_index)
     save_json(STATE_FILE, state)
-
-    return {
-        "removed_sources": removed_sources,
-        "removed_wikis": removed_wikis,
-        "valid": len(docs_index),
-    }
+    return {"removed_sources": removed_sources, "valid": len(docs_index)}
 
 
 # ---------------------------------------------------------------------------
-# Matching / merging
+# Retrieval: find related wiki pages for a new/updated source
 # ---------------------------------------------------------------------------
 
 
-def find_matching_wiki_page(text: str, cfg: dict):
-    """Return (wiki_path, existing_content) if a raw doc matches an existing wiki page, else None."""
-    from .retrieval import relevant_pages
+def _find_related_pages(text: str, top_k: int) -> list[Path]:
+    """Return up to top_k existing wiki pages most semantically similar to text."""
+    if not CFG["faiss"].get("enabled", True):
+        return []
+    try:
+        import sys
+        scripts_dir = str((WIKI.parent.parent / "scripts").resolve())
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        from faiss_index import faiss_available, search_chunks, FAISS_INDEX_FILE
+    except Exception:
+        return []
+    if not faiss_available() or not FAISS_INDEX_FILE.exists():
+        return []
 
-    query = text[:500]
-    threshold = cfg["compile"]["merge_threshold"]
+    query = text[:2000]
+    cfg = dict(CFG)
+    cfg["faiss"] = dict(cfg["faiss"])
+    cfg["faiss"]["top_k"] = max(top_k * 4, 20)
+    try:
+        results = search_chunks(query, cfg)
+    except Exception:
+        return []
+    if not results:
+        return []
 
-    if cfg["faiss"]["enabled"]:
-        try:
-            from faiss_index import faiss_available, search_chunks, FAISS_INDEX_FILE
-            if faiss_available() and FAISS_INDEX_FILE.exists():
-                results = search_chunks(query, cfg)
-                if results:
-                    page_scores = {}
-                    for r in results:
-                        page_scores[r["page"]] = page_scores.get(r["page"], 0) + r["score"]
-                    best_page = max(page_scores, key=page_scores.get)
-                    if page_scores[best_page] >= threshold:
-                        wiki_path = WIKI / best_page
-                        if wiki_path.exists():
-                            return (wiki_path, read_text(wiki_path))
-        except Exception as e:
-            print(f"FAISS match lookup failed, trying TF-IDF: {e}")
-
-    pages = relevant_pages(query, limit=1)
-    if pages:
-        page_text = read_text(pages[0])
-        raw_terms = set(re.findall(r"[a-zA-Z0-9]{3,}", query.lower()))
-        page_terms = set(re.findall(r"[a-zA-Z0-9]{3,}", page_text[:2000].lower()))
-        if raw_terms and page_terms:
-            overlap = len(raw_terms & page_terms) / len(raw_terms)
-            if overlap >= threshold:
-                return (pages[0], page_text)
-
-    return None
-
-
-def update_doc(filename: str, text: str, existing_wiki: str, model: str) -> str:
-    """Merge new source material into an existing wiki article."""
-    max_wiki = CFG["compile"]["max_wiki_chars"]
-    max_source = CFG["compile"]["max_source_chars"]
-
-    prompt = f"""You are updating a personal research wiki article with new source material.
-Merge the new information into the existing article. Preserve the existing structure and content.
-Add new facts, quotes, and points. Do not remove existing content unless it's contradicted.
-Preserve specific details: procedures, methods, requirements, timelines, definitions, and conditions.
-Keep the same markdown section structure. Add new sections if the new source covers topics not in the existing article.
-Add 3-8 wiki style links in markdown form like [Concept](concept.md) when relevant.
-
-EXISTING ARTICLE:
-{truncate_at_sentence(existing_wiki, max_wiki)}
-
-NEW SOURCE ({filename}):
-{truncate_at_sentence(text, max_source)}
-"""
-    return ollama_generate(prompt, model=model)
-
-
-# ---------------------------------------------------------------------------
-# Summarization
-# ---------------------------------------------------------------------------
-
-
-def _summarize_single(filename: str, text: str, model: str) -> str:
-    """Single-pass summarization (truncates if needed)."""
-    source_text = truncate_at_sentence(text, CFG["compile"]["max_source_chars"])
-    prompt = f"""You are compiling a personal research wiki.
-Create a comprehensive markdown article from this source document.
-Your article should preserve the important detail from the source — do NOT over-summarize.
-
-Requirements:
-- Start with '# <Title>' where <Title> is a short, descriptive phrase (3-7 words) that captures the MAIN TOPIC or CONCEPT of the content — NOT the filename. Examples: "# Attention Mechanisms in Transformers", "# Notes on Stoic Philosophy", "# 2024 Q3 Budget Analysis".
-- Start with a ## Summary section (one paragraph overview).
-- Then use ## sections that mirror the source document's own structure (e.g., if the source has Rule 1, Rule 2, etc., create sections for each; if it has chapters, use those).
-- Within each section, preserve specific details: procedures, methods, requirements, timelines, numbered lists, definitions, and conditions. Use sub-headings (###) and bullet points to organize dense content.
-- If the source is a legal document, regulation, or technical specification, preserve the specific rules, requirements, and procedures — these details ARE the knowledge.
-- End with: ## Notable Quotes (2-5 key quotes), ## Open Questions, ## Related Concepts (3-8 wiki links in markdown form like [Concept](concept.md)).
-- Keep it factual and grounded in the source. Do not invent information.
-- The article length should be proportional to the source detail. A detailed source should produce a detailed article.
-
-Source file: {filename}
-
-SOURCE:
-{source_text}
-"""
-    return ollama_generate(prompt, model=model)
-
-
-def _summarize_chunked(filename: str, text: str, model: str) -> str:
-    """Multi-pass chunked summarization for long documents."""
-    max_chars = CFG["compile"]["max_source_chars"]
-    chunks = []
-    pos = 0
-    while pos < len(text):
-        chunk = truncate_at_sentence(text[pos:], max_chars)
-        if not chunk:
-            pos += max_chars
+    page_scores: dict[str, float] = {}
+    for r in results:
+        page = r.get("page")
+        if not page:
             continue
-        chunks.append(chunk)
-        pos += len(chunk)
+        page_scores[page] = page_scores.get(page, 0.0) + float(r.get("score", 0.0))
 
-    print(f"  Chunking: {len(text)} chars -> {len(chunks)} chunks")
-    summaries = []
-    for i, chunk in enumerate(chunks, 1):
-        print(f"  Summarizing chunk {i}/{len(chunks)}...")
-        label = f"(part {i}/{len(chunks)})"
-        prompt = f"""You are compiling a personal research wiki.
-Extract the key facts, points, and quotes from this source document {label}.
-Return a concise bullet-point summary. Be thorough — do not omit details.
+    ranked = sorted(page_scores.items(), key=lambda kv: kv[1], reverse=True)
+    out: list[Path] = []
+    for page_name, _score in ranked[:top_k]:
+        p = WIKI / page_name
+        if p.exists():
+            out.append(p)
+    return out
 
-Source file: {filename}
 
-SOURCE:
-{chunk}
+# ---------------------------------------------------------------------------
+# LLM call: decide writes + deletes for one source
+# ---------------------------------------------------------------------------
+
+
+_JSON_BLOCK = re.compile(r"\{.*\}", re.DOTALL)
+
+
+def _parse_decision(raw: str) -> dict | None:
+    """Extract a JSON decision object from the LLM response. Returns None on failure."""
+    if not raw:
+        return None
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
+    candidate = fenced.group(1) if fenced else None
+    if candidate is None:
+        m = _JSON_BLOCK.search(raw)
+        candidate = m.group(0) if m else None
+    if candidate is None:
+        return None
+    try:
+        obj = json.loads(candidate)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(obj, dict):
+        return None
+    return obj
+
+
+_SAFE_FILENAME = re.compile(r"^[a-z0-9][a-z0-9._-]*\.md$")
+
+
+def _safe_wiki_filename(name: str) -> str | None:
+    """Validate and normalize an LLM-proposed wiki filename. None if unsafe."""
+    if not isinstance(name, str):
+        return None
+    n = Path(name).name.strip().lower()
+    if not n.endswith(".md"):
+        n = slugify(n) + ".md"
+    if n == "index.md":
+        return None
+    if not _SAFE_FILENAME.match(n):
+        n = slugify(n[:-3]) + ".md"
+        if not _SAFE_FILENAME.match(n):
+            return None
+    return n
+
+
+def _build_prompt(rel_name: str, source_text: str, related: list[Path]) -> str:
+    max_source = int(CFG["compile"]["max_source_chars"])
+    truncated_source = truncate_at_sentence(source_text, max_source)
+
+    # Budget the related-pages context to leave headroom for the source + output.
+    # max_source already controls source size; cap related context to ~2x that
+    # by default, scaled by how many pages we include.
+    per_page_budget = max(2000, max_source // max(1, len(related))) if related else 0
+
+    parts: list[str] = []
+    for p in related:
+        try:
+            body = p.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        parts.append(
+            f"=== kb/wiki/{p.name} ===\n"
+            f"{truncate_at_sentence(body, per_page_budget)}"
+        )
+    related_block = "\n\n".join(parts) if parts else "(no related pages found)"
+
+    return f"""You maintain a personal research wiki. A new or updated source has been added to kb/raw/. Decide how to incorporate it into the existing wiki and return ONLY a JSON object.
+
+EXISTING RELATED WIKI PAGES (most-similar first, full or truncated content shown):
+
+{related_block}
+
+NEW/UPDATED SOURCE
+Filename: {rel_name}
+
+{truncated_source}
+
+INSTRUCTIONS
+- If the source supersedes an existing page (e.g. a later draft of the same document), rewrite that page in place by listing it in "writes" with the same filename and the updated content.
+- If the source extends an existing page (e.g. meeting notes about a draft already in the wiki), update that page in place — fold the new information in without losing prior content.
+- If multiple existing pages overlap with the new source and should be merged, write the consolidated result and list the redundant filenames in "deletes".
+- If the source is genuinely about a new topic not covered above, create a new page with a kebab-case .md filename derived from its title.
+- Only list filenames in "deletes" that appear in the EXISTING RELATED WIKI PAGES section above. Never delete a page you also list in "writes".
+
+PAGE FORMAT REQUIREMENTS (apply to every page in "writes")
+- First line: `# <Title>` where <Title> is a short descriptive phrase (3-7 words). Not the filename.
+- Then a `## Summary` section with a single-paragraph overview.
+- Then sections preserving the important detail (procedures, requirements, definitions, timelines, quotes). Use ### subheadings and bullet lists for dense material.
+- Cross-link related pages with markdown links: `[Title](slug.md)`.
+- Do not invent facts that are not in the provided sources.
+
+OUTPUT FORMAT (return ONLY this JSON object, no prose, no markdown fences):
+{{
+  "reasoning": "one short paragraph describing the decision",
+  "writes": [
+    {{"filename": "kebab-case-slug.md", "content": "# Title\\n\\n## Summary\\n..."}}
+  ],
+  "deletes": ["redundant-page.md"]
+}}
 """
-        summary = ollama_generate(prompt, model=model)
-        if summary.strip():
-            summaries.append(summary.strip())
-
-    if not summaries:
-        return ""
-    if len(summaries) == 1:
-        return summaries[0]
-
-    print(f"  Merging {len(summaries)} chunk summaries...")
-    combined = "\n\n---\n\n".join(
-        f"Part {i+1}:\n{s}" for i, s in enumerate(summaries)
-    )
-    prompt = f"""You are compiling a personal research wiki.
-Below are summaries extracted from different parts of the same source document.
-Merge them into a single, comprehensive markdown article. Remove duplicates and organize logically.
-
-Requirements:
-- Start with '# <Title>' where <Title> is a short, descriptive phrase (3-7 words) that captures the MAIN TOPIC or CONCEPT of the content — NOT the filename.
-- Start with a ## Summary section (one paragraph overview).
-- Then use ## sections that mirror the source document's structure. Preserve specific details: procedures, methods, requirements, timelines, definitions, and conditions.
-- Use ### sub-headings and bullet points to organize dense content.
-- End with: ## Notable Quotes, ## Open Questions, ## Related Concepts (3-8 wiki links like [Concept](concept.md)).
-- Keep it factual. Do not omit important details just to be brief — the article length should be proportional to the source detail.
-
-Source file: {filename}
-
-PART SUMMARIES:
-{truncate_at_sentence(combined, max_chars * 2)}
-"""
-    return ollama_generate(prompt, model=model)
 
 
-def summarize_doc(filename: str, text: str, model: str) -> str:
-    max_chars = CFG["compile"]["max_source_chars"]
-    use_chunking = CFG["compile"].get("chunking", False)
-
-    if use_chunking and len(text) > max_chars:
-        return _summarize_chunked(filename, text, model)
-    return _summarize_single(filename, text, model)
+# ---------------------------------------------------------------------------
+# Fallback article (used when the LLM returns no parseable decision)
+# ---------------------------------------------------------------------------
 
 
 def fallback_article(path: Path, text: str) -> str:
@@ -308,7 +278,7 @@ def fallback_article(path: Path, text: str) -> str:
     return f"""# {path.stem}
 
 ## Summary
-Auto-generated fallback page because the model returned an empty response.
+Auto-generated fallback page because the model returned no parseable decision.
 
 ## Key Points
 {chr(10).join(key_points)}
@@ -326,7 +296,144 @@ Auto-generated fallback page because the model returned an empty response.
 
 
 # ---------------------------------------------------------------------------
-# Compile orchestration
+# Apply decisions to disk
+# ---------------------------------------------------------------------------
+
+
+def _append_source_footer(content: str, rel_name: str) -> str:
+    return content.rstrip() + (
+        f"\n\n---\nLast updated from: `{rel_name}`\n"
+        f"Compiled: {dt.datetime.now().isoformat()}\n"
+    )
+
+
+def _apply_decision(
+    rel_name: str,
+    decision: dict,
+    related: list[Path],
+) -> tuple[set[str], list[str]]:
+    """Apply a parsed decision. Returns (changed_pages, deleted_pages)."""
+    changed: set[str] = set()
+    deleted: list[str] = []
+    related_names = {p.name for p in related}
+
+    writes = decision.get("writes") or []
+    deletes = decision.get("deletes") or []
+    write_targets: set[str] = set()
+
+    if isinstance(writes, list):
+        for entry in writes:
+            if not isinstance(entry, dict):
+                continue
+            fname = _safe_wiki_filename(entry.get("filename", ""))
+            content = entry.get("content")
+            if not fname or not isinstance(content, str) or not content.strip():
+                continue
+            if not content.lstrip().startswith("#"):
+                content = f"# {Path(fname).stem}\n\n" + content.strip()
+            content = _append_source_footer(content, rel_name)
+            out_path = WIKI / fname
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(content, encoding="utf-8")
+            changed.add(fname)
+            write_targets.add(fname)
+
+    if isinstance(deletes, list):
+        for d in deletes:
+            fname = _safe_wiki_filename(d) if isinstance(d, str) else None
+            if not fname:
+                continue
+            # Only allow deleting pages that were in the related context AND
+            # are not being (re)written this same turn.
+            if fname not in related_names or fname in write_targets:
+                continue
+            target = WIKI / fname
+            if not target.is_file():
+                continue
+            try:
+                soft_delete(target, "wiki")
+                deleted.append(fname)
+            except Exception as e:
+                print(f"  ! failed to soft-delete {fname}: {e}")
+
+    return changed, deleted
+
+
+# ---------------------------------------------------------------------------
+# Per-source compile
+# ---------------------------------------------------------------------------
+
+
+def _read_source_text(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".docx":
+        return extract_docx_text(path)
+    if suffix == ".pdf":
+        return extract_pdf_text(path)
+    if suffix == ".pptx":
+        return extract_pptx_text(path)
+    return read_text(path)
+
+
+def compile_one_source(path: Path, model: str) -> dict:
+    """Compile a single raw file. Returns dict with keys:
+    rel_name, changed_pages, deleted_pages, fallback (bool), reasoning (str).
+    """
+    rel_name = str(path.relative_to(RAW))
+    text = _read_source_text(path)
+    if not text.strip():
+        return {
+            "rel_name": rel_name,
+            "changed_pages": set(),
+            "deleted_pages": [],
+            "fallback": False,
+            "reasoning": "(source has no readable text)",
+        }
+
+    top_k = int(CFG["compile"].get("related_pages_top_k", 5))
+    related = _find_related_pages(text, top_k=top_k)
+    print(f"Compiling: {rel_name}  (related: {[p.name for p in related] or 'none'})")
+
+    prompt = _build_prompt(rel_name, text, related)
+    response = llamacpp_generate(prompt, model=model)
+    decision = _parse_decision(response)
+
+    if decision is None:
+        # Fallback: write a single page for this source so the run still produces something.
+        fname = slugify(path.stem) + ".md"
+        article = response.strip() if response.strip() else fallback_article(path, text)
+        if not article.lstrip().startswith("#"):
+            article = f"# {path.stem}\n\n" + article.strip()
+        article = _append_source_footer(article, rel_name)
+        (WIKI / fname).write_text(article, encoding="utf-8")
+        return {
+            "rel_name": rel_name,
+            "changed_pages": {fname},
+            "deleted_pages": [],
+            "fallback": True,
+            "reasoning": "(model did not return parseable JSON; wrote a single page as fallback)",
+        }
+
+    changed, deleted = _apply_decision(rel_name, decision, related)
+    if not changed and not deleted:
+        # Decision parsed but did nothing — fall back rather than silently no-op.
+        fname = slugify(path.stem) + ".md"
+        article = fallback_article(path, text)
+        article = _append_source_footer(article, rel_name)
+        (WIKI / fname).write_text(article, encoding="utf-8")
+        changed = {fname}
+
+    return {
+        "rel_name": rel_name,
+        "changed_pages": changed,
+        "deleted_pages": deleted,
+        "fallback": False,
+        "reasoning": str(decision.get("reasoning", "") or "")[:500],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Top-level orchestration
 # ---------------------------------------------------------------------------
 
 
@@ -334,124 +441,99 @@ def compile_documents(
     model: str,
     force: bool = False,
     max_source_chars: int | None = None,
-    chunking: bool = False,
+    **_unused,
 ) -> dict:
-    """Compile raw documents into wiki pages.
+    """Iteratively compile changed raw documents into the wiki.
 
-    Returns a dict with keys: compiled (int), skipped (list of tuples),
-    changed_pages (set of wiki filenames).
+    Returns dict with: compiled (int), skipped (list of (name, error)),
+    changed_pages (set), deleted_pages (list).
     """
     ensure_dirs()
-    if not ping_ollama():
-        raise RuntimeError("Ollama is not running. Start it with: ollama serve")
+    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+        raise RuntimeError(
+            "llama-server is not running and auto_spawn is disabled. "
+            "Start it manually or enable [llamacpp] auto_spawn in kb.toml."
+        )
 
     if max_source_chars is not None:
         CFG["compile"]["max_source_chars"] = max_source_chars
-    if chunking:
-        CFG["compile"]["chunking"] = True
 
-    # Clean up orphaned mappings before compiling
     cleanup = validate_docs_index()
-    if cleanup["removed_sources"] or cleanup["removed_wikis"]:
-        print(f"Cleaned docs.json: {len(cleanup['removed_sources'])} orphaned sources, "
-              f"{len(cleanup['removed_wikis'])} missing wiki pages")
+    if cleanup["removed_sources"]:
+        print(
+            f"Cleaned docs.json: {len(cleanup['removed_sources'])} orphaned source(s) removed"
+        )
 
     state = load_json(STATE_FILE, {"compiled": {}})
     docs_index = load_json(DOC_INDEX_FILE, {})
 
     raw_files = sorted([p for p in RAW.glob("**/*") if should_compile_file(p)])
+
     compiled_now = 0
-    changed_wiki_pages: set = set()
-    skipped = []
+    changed_wiki_pages: set[str] = set()
+    deleted_wiki_pages: list[str] = []
+    skipped: list[tuple[str, str]] = []
 
     for path in raw_files:
-        suffix = path.suffix.lower()
-        if suffix == ".docx":
-            try:
-                text = extract_docx_text(path)
-            except Exception as e:
-                print(f"! Skipping {path.name}: {e}")
-                skipped.append((path.name, str(e)))
-                continue
-        elif suffix == ".pdf":
-            try:
-                text = extract_pdf_text(path)
-            except Exception as e:
-                print(f"! Skipping {path.name}: {e}")
-                skipped.append((path.name, str(e)))
-                continue
-        else:
-            text = read_text(path)
+        rel_name = str(path.relative_to(RAW))
+        try:
+            text = _read_source_text(path)
+        except Exception as e:
+            print(f"! Skipping {rel_name}: {e}")
+            skipped.append((rel_name, str(e)))
+            continue
         if not text.strip():
             continue
 
         digest = sha256_text(text)
-        rel_name = str(path.relative_to(RAW))
         prev = state["compiled"].get(rel_name)
-        wiki_page = docs_index.get(rel_name, {}).get("wiki_page")
-        wiki_exists = (WIKI / wiki_page).exists() if wiki_page else False
-        if prev == digest and wiki_exists and not force:
+        if prev == digest and not force:
             continue
 
-        merge_match = None
-        if not docs_index.get(rel_name) and CFG["compile"].get("merge_into_existing", False):
-            merge_match = find_matching_wiki_page(text, CFG)
+        try:
+            result = compile_one_source(path, model=model)
+        except Exception as e:
+            print(f"! Compile failed for {rel_name}: {e}")
+            skipped.append((rel_name, str(e)))
+            continue
 
-        if merge_match:
-            wiki_path, existing_content = merge_match
-            print(f"Merging: {rel_name} -> {wiki_path.name}")
-            article = update_doc(rel_name, text, existing_content, model=model)
-            if not article.strip():
-                article = fallback_article(path, text)
-            elif not article.lstrip().startswith("#"):
-                article = f"# {path.stem}\n\n" + article.strip()
-            out_path = wiki_path
-        else:
-            print(f"Compiling: {rel_name}")
-            article = summarize_doc(rel_name, text, model=model)
-            if not article.strip():
-                article = fallback_article(path, text)
-            elif not article.lstrip().startswith("#"):
-                article = f"# {path.stem}\n\n" + article.strip()
+        if result["reasoning"]:
+            print(f"  -> {result['reasoning']}")
+        if result["deleted_pages"]:
+            print(f"  -> soft-deleted: {', '.join(result['deleted_pages'])}")
 
-            title_line = article.splitlines()[0] if article.strip() else f"# {path.stem}"
-            title = title_line.lstrip("# ").strip() or path.stem
-            out_name = slugify(title) + ".md"
-            prev_page = docs_index.get(rel_name, {}).get("wiki_page")
-            if prev_page:
-                out_path = WIKI / prev_page
-            else:
-                out_path = WIKI / out_name
-                claimed_pages = {
-                    v["wiki_page"]
-                    for k, v in docs_index.items()
-                    if isinstance(v, dict) and "wiki_page" in v and k != rel_name
-                }
-                if out_path.exists() or out_name in claimed_pages:
-                    out_path = unique_path(out_path)
-
-        source_note = f"\n\n---\nSource: `{rel_name}`\nCompiled: {dt.datetime.now().isoformat()}\n"
-        out_path.write_text(article.strip() + source_note, encoding="utf-8")
+        changed_wiki_pages |= result["changed_pages"]
+        deleted_wiki_pages.extend(result["deleted_pages"])
 
         state["compiled"][rel_name] = digest
-        compile_mode = "merge" if merge_match else ("chunked" if (CFG["compile"].get("chunking") and len(text) > CFG["compile"]["max_source_chars"]) else "single")
         docs_index[rel_name] = {
-            "wiki_page": out_path.name,
             "sha256": digest,
             "updated_at": dt.datetime.now().isoformat(),
-            "compile_mode": compile_mode,
         }
-        changed_wiki_pages.add(out_path.name)
         compiled_now += 1
 
-        # Persist after every doc so interrupted compiles don't leak orphans.
         save_json(STATE_FILE, state)
         save_json(DOC_INDEX_FILE, docs_index)
 
-    if compiled_now > 0:
-        build_wiki_index(None if force else changed_wiki_pages)
-        if CFG["faiss"]["enabled"]:
+    if changed_wiki_pages or deleted_wiki_pages:
+        from .links import resolve_page_file
+        for page_name in changed_wiki_pages:
+            page_path = WIKI / page_name
+            if page_path.exists():
+                resolve_page_file(page_path)
+
+        # If anything was deleted we touch the full index so removed pages drop out.
+        if deleted_wiki_pages:
+            build_wiki_index(None)
+        else:
+            build_wiki_index(None if force else changed_wiki_pages)
+
+        if CFG["faiss"].get("enabled", True):
             try:
+                import sys
+                scripts_dir = str((WIKI.parent.parent / "scripts").resolve())
+                if scripts_dir not in sys.path:
+                    sys.path.insert(0, scripts_dir)
                 from faiss_index import faiss_available, build_faiss_index
                 if faiss_available():
                     print("Updating FAISS index...")
@@ -463,4 +545,5 @@ def compile_documents(
         "compiled": compiled_now,
         "skipped": skipped,
         "changed_pages": changed_wiki_pages,
+        "deleted_pages": deleted_wiki_pages,
     }

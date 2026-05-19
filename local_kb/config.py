@@ -4,15 +4,23 @@ import json
 from .paths import ROOT
 
 _CFG_DEFAULTS = {
-    "model": {"default": "fredrezones55/Qwopus3.5:9b"},
-    "ollama": {"url": "http://127.0.0.1:11434", "timeout": 1800},
+    "model": {"default": "qwopus:v3"},
+    "llamacpp": {
+        "host": "127.0.0.1",
+        "chat_port": 8080,
+        "embed_port": 8081,
+        "timeout": 1800,
+        "auto_spawn": True,
+        "startup_timeout": 90,
+        "server_exe": "",
+        "ollama_models_dir": "",
+        "models": [],
+        "external_gguf_map": {},
+    },
     "compile": {
         "temperature": 0.2,
         "max_source_chars": 55000,
-        "merge_into_existing": False,
-        "merge_threshold": 0.7,
-        "max_wiki_chars": 6000,
-        "chunking": False,
+        "related_pages_top_k": 5,
     },
     "ask": {"temperature": 0.1, "context_per_page": 8000, "default_limit": 6},
     "ingest": {"max_content_chars": 120000},

@@ -1,4 +1,5 @@
 @echo off
+setlocal
 cd /d "%~dp0"
 
 :: Configurable ports — override by setting these before running.
@@ -10,15 +11,21 @@ echo Running preflight checks...
 py preflight.py
 if errorlevel 1 (
     echo.
-    echo Preflight failed. Fix the [FAIL] items above before launching — for
-    echo port conflicts, set KB_API_PORT / KB_FRONTEND_PORT to a free port.
+    echo Preflight failed. Fix the [FAIL] items above before launching.
+    echo - For port conflicts, set KB_API_PORT / KB_FRONTEND_PORT.
+    echo - For llama-server, install llama.cpp at H:\llama.cpp or set LLAMACPP_DIR,
+    echo   or edit [llamacpp] server_exe in kb.toml.
     pause
     exit /b 1
 )
 echo.
-echo Starting Local KB UI...
+echo Starting Local KB UI (llama.cpp backend)...
 echo   Backend:  http://127.0.0.1:%KB_API_PORT%
 echo   Frontend: http://localhost:%KB_FRONTEND_PORT%
+echo.
+echo Expecting llama-server already running (auto_spawn disabled):
+echo   - chat    on 127.0.0.1:8080
+echo   - embeds  on 127.0.0.1:8081
 echo.
 
 set NEXT_PUBLIC_API_BASE=http://127.0.0.1:%KB_API_PORT%
@@ -37,4 +44,5 @@ start http://localhost:%KB_FRONTEND_PORT%
 
 echo Local KB is running.
 echo Open http://localhost:%KB_FRONTEND_PORT% in your browser if it didn't open automatically.
+echo Close the Backend / Frontend windows to stop.
 pause

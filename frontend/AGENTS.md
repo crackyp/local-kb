@@ -11,7 +11,7 @@ A personal knowledge base about [YOUR TOPIC].
 ## Wiki Rules
 - Every topic gets its own .md file in wiki/
 - Every wiki file starts with a one-paragraph summary
-- Link related topics using [[topic-name]] format
+- Link related topics using standard markdown links: `[Topic Title](topic-slug.md)`
 - Maintain an INDEX.md that lists every topic
 - When new raw sources are added, update the relevant wiki articles
 

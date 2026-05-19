@@ -18,7 +18,6 @@ export function CompileTab() {
   const { compiling, liveLines, result, startCompile, stopCompile } = useCompile();
   const [force, setForce] = useState(false);
   const [maxChars, setMaxChars] = useState(55000);
-  const [chunking, setChunking] = useState(false);
   const [idxForce, setIdxForce] = useState(false);
   const [indexResult, setIndexResult] = useState<CommandResponse | null>(null);
   const [indexing, setIndexing] = useState(false);
@@ -32,7 +31,7 @@ export function CompileTab() {
 
   const handleCompile = async () => {
     setIndexResult(null);
-    await startCompile({ model, force, max_source_chars: maxChars, chunking });
+    await startCompile({ model, force, max_source_chars: maxChars });
   };
 
   const handleBuildIndex = async () => {
@@ -70,10 +69,6 @@ export function CompileTab() {
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} className="rounded" />
               <span className="text-sm">Force recompile all docs</span>
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="checkbox" checked={chunking} onChange={(e) => setChunking(e.target.checked)} className="rounded" />
-              <span className="text-sm">Chunk long documents (slower, more complete)</span>
             </label>
           </div>
         </div>

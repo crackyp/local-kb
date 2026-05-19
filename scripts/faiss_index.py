@@ -1,14 +1,12 @@
 """FAISS semantic index for local-kb.
 
-Provides chunking, embedding (via Ollama), and vector search so that
+Provides chunking, embedding (via llama.cpp), and vector search so that
 ``cmd_ask`` can retrieve only the most relevant text fragments instead of
 full wiki pages, dramatically reducing context-window usage.
 """
 
 import json
 import math
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 import sys
@@ -17,7 +15,8 @@ sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
 
 from local_kb.paths import INDEX, WIKI
 from local_kb.config import CFG
-from local_kb.utils import read_text, sha256_text, load_json, save_json
+from local_kb.utils import read_text, sha256_text, load_json, save_json, truncate_at_sentence
+from local_kb.llamacpp import embed as llamacpp_embed
 
 # ---------------------------------------------------------------------------
 # Index file paths
@@ -37,52 +36,6 @@ def faiss_available() -> bool:
         return True
     except ImportError:
         return False
-
-
-# ---------------------------------------------------------------------------
-# Ollama embedding helper
-# ---------------------------------------------------------------------------
-
-_BATCH_SIZE = 32
-
-
-def ollama_embed(texts: list, model: str, ollama_url: str, timeout: int) -> list:
-    """Embed *texts* via the Ollama ``/api/embed`` endpoint.
-
-    Returns a list of float-lists, one per input text.  Batches requests to
-    avoid oversized payloads.
-    """
-    all_embeddings: list = []
-    for start in range(0, len(texts), _BATCH_SIZE):
-        batch = texts[start : start + _BATCH_SIZE]
-        payload = {"model": model, "input": batch}
-        req = urllib.request.Request(
-            ollama_url + "/api/embed",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                body = json.loads(resp.read().decode("utf-8"))
-                embeddings = body.get("embeddings", [])
-                if len(embeddings) != len(batch):
-                    raise RuntimeError(
-                        f"Ollama returned {len(embeddings)} embeddings for {len(batch)} inputs"
-                    )
-                all_embeddings.extend(embeddings)
-        except urllib.error.HTTPError as e:
-            detail = ""
-            try:
-                detail = e.read().decode("utf-8", errors="ignore")[:300]
-            except Exception:
-                pass
-            raise RuntimeError(f"Ollama embed failed: HTTP {e.code} - {detail}")
-        except Exception as e:
-            if isinstance(e, RuntimeError):
-                raise
-            raise RuntimeError(f"Ollama embed failed: {e}")
-    return all_embeddings
 
 
 # ---------------------------------------------------------------------------
@@ -208,11 +161,10 @@ def _full_build(cfg: dict, current_hashes: dict) -> dict:
     print(f"Embedding {len(all_chunks)} chunks from {len(current_hashes)} pages...")
 
     texts = [c["text"] for c in all_chunks]
-    embeddings = ollama_embed(
+    embeddings = llamacpp_embed(
         texts,
         model=fcfg["embed_model"],
-        ollama_url=cfg["ollama"]["url"],
-        timeout=cfg["ollama"]["timeout"],
+        timeout=cfg["llamacpp"]["timeout"],
     )
 
     matrix = np.array(embeddings, dtype=np.float32)
@@ -305,11 +257,10 @@ def _incremental_update(cfg: dict, current_hashes: dict, state: dict) -> dict:
         n_pages = len(added_or_changed)
         print(f"Embedding {len(new_chunks)} chunks from {n_pages} new/changed page(s)...")
         texts = [c["text"] for c in new_chunks]
-        embeddings = ollama_embed(
+        embeddings = llamacpp_embed(
             texts,
             model=fcfg["embed_model"],
-            ollama_url=cfg["ollama"]["url"],
-            timeout=cfg["ollama"]["timeout"],
+            timeout=cfg["llamacpp"]["timeout"],
         )
         matrix = np.array(embeddings, dtype=np.float32)
         faiss.normalize_L2(matrix)
@@ -404,11 +355,10 @@ def search_chunks(question: str, cfg: dict) -> list:
         meta = {str(i): m for i, m in enumerate(meta)}
 
     # Embed the question
-    q_emb = ollama_embed(
+    q_emb = llamacpp_embed(
         [question],
         model=fcfg["embed_model"],
-        ollama_url=cfg["ollama"]["url"],
-        timeout=cfg["ollama"]["timeout"],
+        timeout=cfg["llamacpp"]["timeout"],
     )
     q_vec = np.array(q_emb, dtype=np.float32)
     faiss.normalize_L2(q_vec)
@@ -441,7 +391,12 @@ def search_chunks(question: str, cfg: dict) -> list:
 # ---------------------------------------------------------------------------
 
 def assemble_context(question: str, cfg: dict):
-    """Retrieve relevant chunks and assemble context within the budget.
+    """Retrieve relevant chunks, then expand to full wiki pages.
+
+    Hybrid retrieval: FAISS ranks pages by their best-scoring chunk, then we
+    load each page's full text (capped at ``ask.context_per_page``) in rank
+    order until the context budget is exhausted. This avoids dropping
+    surrounding context that lives in lower-ranked chunks of the same page.
 
     Returns ``(context_string, list_of_page_names)`` or ``(None, [])`` if
     retrieval fails or yields nothing.
@@ -452,61 +407,33 @@ def assemble_context(question: str, cfg: dict):
         return None, []
 
     budget = fcfg["context_budget"]
-    used = 0
-    selected: list = []  # list of (page, text, score)
+    per_page_cap = cfg["ask"]["context_per_page"]
 
-    # Group by page to merge overlapping chunks
-    page_chunks: dict = {}
+    # Rank pages by their best chunk score
+    page_best: dict = {}
     for c in chunks:
-        page_chunks.setdefault(c["page"], []).append(c)
+        prev = page_best.get(c["page"])
+        if prev is None or c["score"] > prev:
+            page_best[c["page"]] = c["score"]
 
-    # Merge overlapping/adjacent chunks within each page
-    merged: list = []
-    for page, pchunks in page_chunks.items():
-        pchunks.sort(key=lambda x: x["start"])
-        spans: list = []
-        for c in pchunks:
-            if spans and c["start"] <= spans[-1]["end"]:
-                # Overlap: extend the span
-                spans[-1]["end"] = max(spans[-1]["end"], c["end"])
-                spans[-1]["text"] = spans[-1]["text"] + c["text"][spans[-1]["end"] - c["start"]:]
-                spans[-1]["score"] = max(spans[-1]["score"], c["score"])
-            else:
-                spans.append(dict(c))
-        for s in spans:
-            merged.append(s)
+    ranked_pages = sorted(page_best.items(), key=lambda x: x[1], reverse=True)
 
-    # Sort by score descending, greedily fill budget
-    merged.sort(key=lambda x: x["score"], reverse=True)
-
-    for chunk in merged:
-        text = chunk["text"]
-        cost = len(text) + len(chunk["page"]) + 10  # header overhead
+    selected: list = []  # (page, text)
+    used = 0
+    for page, _score in ranked_pages:
+        full = read_text(WIKI / page)
+        text = truncate_at_sentence(full, per_page_cap)
+        cost = len(text) + len(page) + 10  # header overhead
         if used + cost > budget and selected:
             break
-        selected.append((chunk["page"], text, chunk["score"]))
+        selected.append((page, text))
         used += cost
 
     if not selected:
         return None, []
 
-    # Group selected chunks by page for coherent output
-    page_order: list = []
-    page_texts: dict = {}
-    for page, text, _score in selected:
-        if page not in page_texts:
-            page_order.append(page)
-            page_texts[page] = []
-        page_texts[page].append(text)
-
-    parts: list = []
-    for page in page_order:
-        header = f"## {page}"
-        body = "\n\n".join(page_texts[page])
-        parts.append(f"{header}\n{body}")
-
-    context = "\n\n".join(parts)
-    return context, page_order
+    parts = [f"## {page}\n{text}" for page, text in selected]
+    return "\n\n".join(parts), [p for p, _ in selected]
 
 
 # ---------------------------------------------------------------------------

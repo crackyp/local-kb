@@ -6,7 +6,7 @@ This guide walks you through setup, ingest, compile, Q&A, maintenance, and troub
 
 ## Overview
 
-Local KB is a CLI workflow for building a personal wiki from your research material.
+Local KB is a CLI + web UI workflow for building a personal wiki from your research material.
 
 Flow:
 1. Collect source files in `kb/raw/`
@@ -20,49 +20,31 @@ You can do this either from CLI (`scripts/kb.py`) or from the Next.js web UI.
 
 ## Prerequisites
 
-- macOS, Linux, or WSL
-- Python 3.10+
-- Ollama running locally
-- One pulled model (examples: `phi4-mini`, `qwen2.5:7b`)
-- Optional for PDF support: `pypdf`
-- Optional UI: Node.js 18+ (for the Next.js frontend)
+- Windows, macOS, Linux, or WSL
+- Python 3.11+
+- `llama-server.exe` from llama.cpp at `H:\llama.cpp\` (or set `LLAMACPP_DIR`)
+- One or more chat-model GGUFs (`qwopus:v3` is the default) — referenced in `kb.toml` under `[llamacpp.external_gguf_map]` or resolvable via the Ollama blob store at `H:\ollama\models`
+- An embedding GGUF (default tag: `nomic-embed-text:latest`) — required for FAISS retrieval. Set `[faiss] enabled = false` in `kb.toml` to skip and use TF-IDF instead.
+- Optional UI: Node.js 18+
+
+`llama-server` is spawned automatically when needed: a chat process on port 8080 (model-swappable per request) and an embeddings process on port 8081 (fixed model). Disable auto-spawn by setting `[llamacpp] auto_spawn = false` in `kb.toml` and start the servers yourself.
 
 ---
 
 ## Installation
 
-### Option A: Recommended (macOS)
-
 ```bash
 git clone https://github.com/crackyp/local-kb.git
 cd local-kb
-./scripts/setup_mac.sh phi4-mini
+pip install -r requirements.txt
+cd frontend && npm install && cd ..
 ```
 
-### Option B: Recommended (Windows PowerShell)
-
-```powershell
-git clone https://github.com/crackyp/local-kb.git
-cd local-kb
-powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1 -Model phi4-mini
-```
-
-### Option C: Manual setup (any OS)
-
-```bash
-git clone https://github.com/crackyp/local-kb.git
-cd local-kb
-python3 -m pip install --user -r requirements.txt
-ollama pull phi4-mini
-```
-
-If Ollama is not running:
-
-```bash
-ollama serve
-```
-
-(Leave that running in a separate terminal.)
+Configure `kb.toml`:
+- `[model] default` — default chat tag
+- `[llamacpp] server_exe` — absolute path to `llama-server.exe` (or leave empty and use `$LLAMACPP_DIR`)
+- `[llamacpp.external_gguf_map]` — tag → GGUF path overrides
+- `[faiss] embed_model` — tag for the embedding model
 
 ---
 
@@ -70,9 +52,9 @@ ollama serve
 
 ```bash
 cd local-kb
-python3 scripts/kb.py compile --model phi4-mini
-python3 scripts/kb.py ask "What is this project for?" --model phi4-mini
-python3 scripts/kb.py lint
+python scripts/kb.py compile --model qwopus:v3
+python scripts/kb.py ask "What is this project for?" --model qwopus:v3
+python scripts/kb.py lint
 ```
 
 ---
@@ -82,11 +64,8 @@ python3 scripts/kb.py lint
 Launch UI:
 
 ```bash
-# Install deps
 pip install -r requirements.txt
 cd frontend && npm install && cd ..
-
-# Start backend + frontend
 python start-ui.py
 ```
 
@@ -101,110 +80,46 @@ Then open http://localhost:3000.
 
 ## Command Reference
 
-> Windows tip: replace `python3` with `py` in the commands below.
-
 ### 1) Ingest local files
 
 ```bash
-python3 scripts/kb.py ingest "~/Research/*.md" "~/Research/*.txt"
+python scripts/kb.py ingest "~/Research/*.md" "~/Research/*.txt"
 ```
-
-What it does:
-- Copies matching files into `kb/raw/`
-- Preserves existing files
-- Appends timestamp if name collision occurs
-
----
 
 ### 2) Ingest web pages
 
 ```bash
-# Basic page ingest
-python3 scripts/kb.py ingest-url https://example.com
-
-# Download up to 20 images found in page HTML
-python3 scripts/kb.py ingest-url https://example.com --download-images --max-images 20
+python scripts/kb.py ingest-url https://example.com
+python scripts/kb.py ingest-url https://example.com --download-images --max-images 20
 ```
-
-What it does:
-- Fetches the URL
-- Converts main HTML body to markdown-ish text
-- Saves output to `kb/raw/<url-derived>.md`
-- Optional image download to `kb/raw/assets/<page>/`
-
----
 
 ### 3) Ingest PDFs
 
 ```bash
-python3 -m pip install --user -r requirements.txt
-python3 scripts/kb.py ingest-pdf "~/Papers/*.pdf"
+python scripts/kb.py ingest-pdf "~/Papers/*.pdf"
+python scripts/kb.py ingest-pdf "~/Papers/*.pdf" --max-pages 25
+python scripts/kb.py ingest-pdf "~/Papers/*.pdf" --copy-original
 ```
-
-Useful flags:
-
-```bash
-# Only first 25 pages
-python3 scripts/kb.py ingest-pdf "~/Papers/*.pdf" --max-pages 25
-
-# Also copy original PDF into kb/raw
-python3 scripts/kb.py ingest-pdf "~/Papers/*.pdf" --copy-original
-```
-
-What it does:
-- Extracts text from PDF pages
-- Writes markdown files like `kb/raw/paper-name.pdf.md`
-
----
 
 ### 4) Compile wiki pages
 
 ```bash
-python3 scripts/kb.py compile --model phi4-mini
+python scripts/kb.py compile --model qwopus:v3
+python scripts/kb.py compile --model qwopus:v3 --force
 ```
-
-What it does:
-- Reads text-like files from `kb/raw/`
-- Summarizes each into a wiki page in `kb/wiki/`
-- Updates incremental state in `kb/index/`
-- Skips unchanged documents by default
-
-Force recompile:
-
-```bash
-python3 scripts/kb.py compile --model phi4-mini --force
-```
-
----
 
 ### 5) Ask questions
 
 ```bash
-python3 scripts/kb.py ask "What are the top 5 concepts?" --model phi4-mini
+python scripts/kb.py ask "What are the top 5 concepts?" --model qwopus:v3
+python scripts/kb.py ask "Question" --model qwopus:v3 --limit 8
 ```
-
-What it does:
-- Selects relevant wiki pages
-- Prompts the model using those pages as context
-- Writes markdown answer to `kb/outputs/qa-<timestamp>.md`
-
-Optional context size:
-
-```bash
-python3 scripts/kb.py ask "Question" --model phi4-mini --limit 8
-```
-
----
 
 ### 6) Lint wiki links
 
 ```bash
-python3 scripts/kb.py lint
+python scripts/kb.py lint
 ```
-
-What it checks:
-- Broken markdown links to missing wiki pages
-- Orphan pages with no inbound links
 
 ---
 
@@ -233,11 +148,6 @@ Open this folder as your vault root:
 local-kb/kb
 ```
 
-Best practice:
-- Keep `raw` as source-of-truth intake
-- Keep `wiki` as distilled knowledge graph
-- Keep `outputs` as query history and reports
-
 ---
 
 ## Supported Formats
@@ -248,80 +158,64 @@ Best practice:
 - Web files: `.html`, `.htm`
 - Code/config/log text files
 
-### Supported with dedicated parser
-- PDF via `ingest-pdf`
+### Office docs (text auto-extracted on compile)
+- `.pdf` — `pypdf` with OCR fallback (`easyocr` + `pymupdf`) for scanned/image PDFs. Also has a dedicated `ingest-pdf` CLI command / **PDF** UI tab that extracts to markdown upfront so you can review before compiling.
+- `.docx` — `python-docx`
+- `.pptx` — `python-pptx`
 
-### Not native (convert first)
-- `.docx`, `.pptx`
+Drop the file into `kb/raw/` (or use the **Files** upload tab) and the next `compile` pulls the text out.
+
+### Not native
 - images/audio/video as source text
 
 ---
 
 ## Model Tips
 
-- Start with `phi4-mini` for speed on laptops.
-- Use larger models if you want richer summaries.
-- Always pass model explicitly:
-
-```bash
-python3 scripts/kb.py compile --model phi4-mini
-python3 scripts/kb.py ask "..." --model phi4-mini
-```
+- llama-server hosts one model per port. Swapping the chat tag mid-session forces a stop + reload (~3-10 s). Group calls by model when possible.
+- The embedding server stays loaded with one fixed model on its own port — no swap penalty.
+- Suggested tags (with appropriate GGUFs):
+  - `qwopus:v3` — reasoning + tool calling, the default
+  - `gpt-oss:20b` — heavy reasoning (MoE, needs `n_cpu_moe` tuning on 8GB VRAM)
+  - `gemma4:e4b` — balanced general work
+  - `gemma4:e2b` — fast/cheap drafting
+- Per-tag flag tuning lives in `llamacpp_tuned.json` at the project root. Without an entry, safe defaults are used.
 
 ---
 
 ## Troubleshooting
 
-### `Ollama call failed: HTTP 404`
-Model name not installed.
+### `llama-server failed for model 'X': process exited (code N)`
+The model failed to load. The error message includes the last 4 KB of stderr — check it for architecture or tensor mismatch errors. If the Ollama blob is incompatible, download a known-good GGUF from HuggingFace and add an entry to `[llamacpp.external_gguf_map]` in `kb.toml`.
 
-```bash
-ollama list
-ollama pull phi4-mini
-```
+### `No GGUF mapping or Ollama manifest for 'X'`
+Either add an explicit entry to `[llamacpp.external_gguf_map]` in `kb.toml`, or pull the model via Ollama so its manifest exists at `$OLLAMA_MODELS/manifests/registry.ollama.ai/library/<name>/<version>`.
+
+### `llama-server.exe not found`
+Set `[llamacpp] server_exe` in `kb.toml` to the absolute path, or set the `LLAMACPP_DIR` environment variable.
 
 ### `No relevant wiki pages found`
 Compile first:
 
 ```bash
-python3 scripts/kb.py compile --model phi4-mini
+python scripts/kb.py compile --model qwopus:v3
 ```
 
 ### `PDF ingest requires pypdf`
-Install dependency:
+Install dependencies:
 
 ```bash
-python3 -m pip install --user -r requirements.txt
-```
-
-### Setup script says Homebrew missing
-If Ollama already works, skip setup script and run commands manually.
-
-### PowerShell blocks script execution
-Run with temporary bypass:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1 -Model phi4-mini
-```
-
-### `py` command not found on Windows
-Use `python` instead:
-
-```powershell
 python -m pip install -r requirements.txt
-python start-ui.py
 ```
 
 ---
 
 ## Updating from older version
 
-If you already have a working `local-kb` folder and want latest code:
-
 ```bash
 cd local-kb
 git pull
-python3 -m pip install --user -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 Your existing data in `kb/raw`, `kb/wiki`, `kb/outputs`, and `kb/index` stays intact.
@@ -331,20 +225,10 @@ Your existing data in `kb/raw`, `kb/wiki`, `kb/outputs`, and `kb/index` stays in
 ## FAQ
 
 ### Does this send my data to the cloud?
-No, not by default. It talks to your local Ollama server (`127.0.0.1`).
+No. All LLM and embedding calls go to a local `llama-server` process bound to `127.0.0.1`.
 
 ### Can I use this without Obsidian?
 Yes. Obsidian is optional; files are plain markdown on disk.
 
 ### Can it process huge corpora?
-Yes, but v1/v2 are simple and local. For very large corpora you may want chunking + embeddings + retrieval.
-
----
-
-## Contributing
-
-PRs are welcome for:
-- Better HTML/article extraction
-- Better wiki linking strategy
-- Optional embedding-based retrieval
-- Slide export and report templates
+Yes, but be mindful: each unique chat-model swap forces a server reload. Consider sticking to one tag for a long compile job.

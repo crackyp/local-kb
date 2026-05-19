@@ -24,6 +24,7 @@ REQUIRED_PYTHON_PACKAGES = [
     ("uvicorn", "uvicorn"),
     ("pypdf", "pypdf"),
     ("docx", "python-docx"),
+    ("pptx", "python-pptx"),
     ("pydantic", "pydantic"),
     ("bs4", "beautifulsoup4"),
 ]
@@ -91,18 +92,40 @@ def check_port_free(port: int, label: str) -> bool:
         return False
 
 
-def check_ollama() -> bool:
-    """Check that Ollama is reachable."""
-    url = os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434")
+def check_llamacpp() -> bool:
+    """Check that llama-server is reachable (or that the executable exists for auto-spawn)."""
+    sys.path.insert(0, str(ROOT))
     try:
-        req = urllib.request.Request(url + "/", method="GET")
-        with urllib.request.urlopen(req, timeout=3):
-            pass
-        _ok(f"Ollama reachable at {url}")
-        return True
-    except Exception:
-        _warn(f"Ollama not reachable at {url} — LLM features will not work until Ollama is running")
+        from local_kb.config import CFG
+        from local_kb import llamacpp as _llama
+    except Exception as e:
+        _warn(f"could not import local_kb.llamacpp: {e}")
         return False
+
+    cfg = CFG["llamacpp"]
+    chat_url = f"http://{cfg['host']}:{cfg['chat_port']}/health"
+    try:
+        with urllib.request.urlopen(chat_url, timeout=3):
+            _ok(f"llama-server reachable at http://{cfg['host']}:{cfg['chat_port']}")
+            return True
+    except Exception:
+        pass
+
+    if cfg.get("auto_spawn", True):
+        exe = _llama._server_exe()
+        if os.path.isfile(exe):
+            _ok(f"llama-server.exe found at {exe} (auto-spawn enabled)")
+            return True
+        _warn(
+            f"llama-server.exe not found at {exe} — LLM features will not work. "
+            "Set [llamacpp] server_exe in kb.toml or LLAMACPP_DIR env var."
+        )
+        return False
+    _warn(
+        f"llama-server not reachable at http://{cfg['host']}:{cfg['chat_port']} "
+        "and auto_spawn is disabled"
+    )
+    return False
 
 
 def run_checks() -> bool:
@@ -124,7 +147,7 @@ def run_checks() -> bool:
     print()
 
     print("  Services:")
-    check_ollama()
+    check_llamacpp()
     print()
 
     all_ok = deps_ok and node_ok and api_ok and fe_ok

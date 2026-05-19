@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { IngestTab } from "@/components/IngestTab";
 import { CompileTab } from "@/components/CompileTab";
 import { AskTab } from "@/components/AskTab";
+import { ChatTab } from "@/components/ChatTab";
 import { ExplorerTab } from "@/components/ExplorerTab";
 import { QualityTab } from "@/components/QualityTab";
 
@@ -24,6 +25,7 @@ export default function HomePage() {
               {activeView === "ingest" && <IngestTab />}
               {activeView === "compile" && <CompileTab />}
               {activeView === "ask" && <AskTab />}
+              {activeView === "chat" && <ChatTab />}
               {activeView === "explorer" && <ExplorerTab />}
               {activeView === "quality" && <QualityTab />}
             </div>

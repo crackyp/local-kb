@@ -1,7 +1,7 @@
 # Knowledge Base Schema
 
 ## What This Is
-A personal knowledge base.
+A personal knowledge base about a PRD for a strategy for storing credit data in a marketing data platform.
 
 ## How It's Organized
 - raw/ contains unprocessed source material. Never modify these files.
@@ -14,3 +14,6 @@ A personal knowledge base.
 - Link related topics using standard markdown links: `[Topic Title](topic-slug.md)`
 - Maintain an INDEX.md that lists every topic
 - When new raw sources are added, update the relevant wiki articles
+
+## My Interests
+[List 3-5 things you want this knowledge base to focus on]

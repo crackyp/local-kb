@@ -23,7 +23,7 @@ TEXT_EXTENSIONS = {
     ".py", ".js", ".ts", ".tsx", ".jsx", ".java", ".go", ".rs", ".c", ".cpp",
     ".h", ".hpp", ".ipynb", ".log", ".ini", ".cfg", ".toml", ".sql", ".sh",
 }
-EXTRACTABLE_EXTENSIONS = {".docx", ".pdf"}
+EXTRACTABLE_EXTENSIONS = {".docx", ".pdf", ".pptx"}
 SKIP_PARTS = {"assets", ".git", "node_modules", "__pycache__"}
 
 

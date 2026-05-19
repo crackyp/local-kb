@@ -86,6 +86,25 @@ def extract_docx_text(docx_path: Path) -> str:
     return "\n\n".join(paragraphs)
 
 
+def extract_pptx_text(pptx_path: Path) -> str:
+    try:
+        from pptx import Presentation  # type: ignore
+    except Exception:
+        raise RuntimeError(
+            "PPTX extraction requires python-pptx. Install with: pip install python-pptx"
+        )
+
+    prs = Presentation(str(pptx_path))
+    parts = []
+    for slide in prs.slides:
+        for shape in slide.shapes:
+            if hasattr(shape, "text") and shape.text.strip():
+                parts.append(shape.text.strip())
+        if parts and parts[-1]:
+            parts.append("")
+    return "\n".join(parts)
+
+
 def _collapse_blank_lines(text: str) -> str:
     text = text.replace("\r", "")
     text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)

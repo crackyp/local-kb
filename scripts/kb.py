@@ -29,8 +29,9 @@ from local_kb.config import CFG
 from local_kb.paths import RAW, RAW_ASSETS, WIKI, OUTPUTS, ensure_dirs
 from local_kb.utils import (
     slugify, unique_path, read_text, resolve_input_patterns,
-    ping_ollama, ollama_generate, truncate_at_sentence,
+    truncate_at_sentence,
 )
+from local_kb.llamacpp import ping as ping_llamacpp, generate as llamacpp_generate
 from local_kb.extract import extract_pdf_text, extract_docx_text
 from local_kb.ingest import ingest_urls, format_ingest_report
 from local_kb.compile import compile_documents, build_wiki_index
@@ -125,9 +126,10 @@ def cmd_compile(args):
         model=args.model,
         force=args.force,
         max_source_chars=getattr(args, "max_source_chars", None),
-        chunking=getattr(args, "chunking", False),
     )
     print(f"Compile complete. Updated {result['compiled']} document(s).")
+    if result.get("deleted_pages"):
+        print(f"Soft-deleted {len(result['deleted_pages'])} superseded wiki page(s).")
     if result["skipped"]:
         print(f"\nSkipped {len(result['skipped'])} file(s):")
         for name, err in result["skipped"]:
@@ -136,8 +138,11 @@ def cmd_compile(args):
 
 def cmd_ask(args):
     ensure_dirs()
-    if not ping_ollama():
-        raise RuntimeError("Ollama is not running. Start it with: ollama serve")
+    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+        raise RuntimeError(
+            "llama-server is not running and auto_spawn is disabled. "
+            "Start it manually or enable [llamacpp] auto_spawn in kb.toml."
+        )
 
     context = None
 
@@ -165,11 +170,11 @@ def cmd_ask(args):
         context = "\n\n".join(context_chunks)
 
     prompt = f"""You are answering a question using the provided wiki pages.
+Use every relevant detail from the context — do not omit information that bears on the question.
 Return markdown with:
 - # Answer
 - ## Direct response
 - ## Evidence (bullet points with source page names)
-- ## Gaps / uncertainty
 - ## Suggested follow-up notes
 
 Question: {args.question}
@@ -177,7 +182,7 @@ Question: {args.question}
 WIKI CONTEXT:
 {context}
 """
-    answer = ollama_generate(prompt, model=args.model, temperature=CFG["ask"]["temperature"])
+    answer = llamacpp_generate(prompt, model=args.model, temperature=CFG["ask"]["temperature"])
 
     ts = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     out_path = OUTPUTS / f"qa-{ts}.md"
@@ -188,8 +193,11 @@ WIKI CONTEXT:
 
 def cmd_index(args):
     ensure_dirs()
-    if not ping_ollama():
-        raise RuntimeError("Ollama is not running. Start it with: ollama serve")
+    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+        raise RuntimeError(
+            "llama-server is not running and auto_spawn is disabled. "
+            "Start it manually or enable [llamacpp] auto_spawn in kb.toml."
+        )
     try:
         from faiss_index import faiss_available, build_faiss_index
     except ImportError:
@@ -298,7 +306,6 @@ def build_parser():
     p_compile.add_argument("--model", default=CFG["model"]["default"])
     p_compile.add_argument("--force", action="store_true")
     p_compile.add_argument("--max-source-chars", type=int, default=None, help="Override max chars per source doc")
-    p_compile.add_argument("--chunking", action="store_true", help="Enable chunked compilation for long documents")
     p_compile.set_defaults(func=cmd_compile)
 
     p_ask = sub.add_parser("ask", help="Answer question from wiki and write markdown output")

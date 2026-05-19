@@ -5,7 +5,8 @@ from pathlib import Path
 
 from .config import CFG
 from .paths import WIKI, OUTPUTS, ensure_dirs
-from .utils import read_text, extract_links, ping_ollama, ollama_generate
+from .utils import read_text, extract_links
+from .llamacpp import ping as ping_llamacpp, generate as llamacpp_generate
 
 
 def health_check(model: str) -> dict:
@@ -15,8 +16,11 @@ def health_check(model: str) -> dict:
     page_count (int).
     """
     ensure_dirs()
-    if not ping_ollama():
-        raise RuntimeError("Ollama is not running. Start it with: ollama serve")
+    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+        raise RuntimeError(
+            "llama-server is not running and auto_spawn is disabled. "
+            "Start it manually or enable [llamacpp] auto_spawn in kb.toml."
+        )
 
     pages = sorted(WIKI.glob("*.md"))
     pages = [p for p in pages if p.name != "INDEX.md"]
@@ -59,7 +63,7 @@ Produce a health-check report in markdown with these sections:
 Be specific. Reference page filenames. If a section has no issues, say "None found."
 """
     print(f"Reviewing {len(pages)} wiki pages...")
-    report = ollama_generate(prompt, model=model, temperature=CFG["ask"]["temperature"])
+    report = llamacpp_generate(prompt, model=model, temperature=CFG["ask"]["temperature"])
 
     ts = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     out_path = OUTPUTS / f"health-check-{ts}.md"

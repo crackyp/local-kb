@@ -239,7 +239,41 @@ export function ExplorerTab() {
           ) : content ? (
             activeTab === "wiki" || selected.name.endsWith(".md") ? (
               <div className="prose prose-slate prose-sm max-w-none bg-slate-50 rounded-lg p-4 max-h-[60vh] overflow-auto">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    a: ({ href, children, ...props }) => {
+                      const isInternalMd =
+                        !!href &&
+                        !/^[a-z]+:\/\//i.test(href) &&
+                        !href.startsWith("/") &&
+                        !href.startsWith("#") &&
+                        href.split("#")[0].toLowerCase().endsWith(".md");
+                      if (isInternalMd) {
+                        const targetName = href!.split("#")[0].split("/").pop()!;
+                        const target = active.files.find((f) => f.name === targetName);
+                        return (
+                          <a
+                            href={href}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (target) handleSelect(target);
+                            }}
+                            className={target ? "" : "text-rose-600 line-through"}
+                            title={target ? "" : "No matching page in this view"}
+                          >
+                            {children}
+                          </a>
+                        );
+                      }
+                      return (
+                        <a href={href} target="_blank" rel="noreferrer" {...props}>
+                          {children}
+                        </a>
+                      );
+                    },
+                  }}
+                >
                   {content.length > 15000 ? content.slice(0, 15000) + "\n\n...(truncated)" : content}
                 </ReactMarkdown>
               </div>

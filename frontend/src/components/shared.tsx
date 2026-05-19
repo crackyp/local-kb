@@ -69,7 +69,7 @@ export function ModelSelect({
   const current = value ?? globalModel;
   const handleChange = onChange ?? setGlobalModel;
 
-  if (status?.ollama.models && status.ollama.models.length > 0) {
+  if (status?.llamacpp.models && status.llamacpp.models.length > 0) {
     return (
       <div>
         <label className="text-xs text-slate-500">{label}</label>
@@ -78,7 +78,7 @@ export function ModelSelect({
           onChange={(e) => handleChange(e.target.value)}
           className="w-full mt-1 px-2 py-1.5 border rounded-lg text-sm bg-white text-slate-900"
         >
-          {status.ollama.models.map((m) => (
+          {status.llamacpp.models.map((m) => (
             <option key={m} value={m}>
               {m}
             </option>

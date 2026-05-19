@@ -5,11 +5,8 @@ import glob
 import hashlib
 import os
 import re
-import urllib.error
-import urllib.request
 from pathlib import Path
 
-from .config import CFG
 from .paths import SKIP_PARTS, TEXT_EXTENSIONS, EXTRACTABLE_EXTENSIONS
 
 
@@ -126,46 +123,3 @@ def should_compile_file(path: Path) -> bool:
         return False
 
 
-# ---------------------------------------------------------------------------
-# Ollama helpers
-# ---------------------------------------------------------------------------
-
-
-def ping_ollama() -> bool:
-    try:
-        req = urllib.request.Request(CFG["ollama"]["url"] + "/", method="GET")
-        with urllib.request.urlopen(req, timeout=5):
-            return True
-    except Exception:
-        return False
-
-
-def ollama_generate(prompt: str, model: str, temperature: float = 0.2) -> str:
-    payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False,
-        "options": {"temperature": temperature},
-    }
-    req = urllib.request.Request(
-        CFG["ollama"]["url"] + "/api/generate",
-        data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=CFG["ollama"]["timeout"]) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            return body.get("response", "").strip()
-    except urllib.error.HTTPError as e:
-        body = ""
-        try:
-            body = e.read().decode("utf-8", errors="ignore")
-        except Exception:
-            pass
-        msg = f"HTTP {e.code}"
-        if body:
-            msg += f" - {body[:300]}"
-        raise RuntimeError(f"Ollama call failed: {msg}")
-    except Exception as e:
-        raise RuntimeError(f"Ollama call failed: {e}")

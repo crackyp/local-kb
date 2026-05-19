@@ -38,8 +38,8 @@ export function StatusProvider({ children }: { children: ReactNode }) {
 
   // Auto-select first model when models arrive and none chosen yet
   useEffect(() => {
-    if (!model && status?.ollama.models?.length) {
-      setModel(status.ollama.models[0]);
+    if (!model && status?.llamacpp.models?.length) {
+      setModel(status.llamacpp.models[0]);
     }
   }, [status, model]);
 

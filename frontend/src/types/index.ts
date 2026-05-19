@@ -1,4 +1,4 @@
-export type View = "ingest" | "compile" | "ask" | "explorer" | "quality";
+export type View = "ingest" | "compile" | "ask" | "chat" | "explorer" | "quality";
 
 export interface FileMeta {
   name: string;
@@ -10,13 +10,14 @@ export interface FileMeta {
   title?: string;
 }
 
-export interface OllamaStatus {
+export interface LlamaCppStatus {
   running: boolean;
   models: string[];
+  loaded: string | null;
 }
 
 export interface StatusResponse {
-  ollama: OllamaStatus;
+  llamacpp: LlamaCppStatus;
   files: {
     raw: number;
     wiki: number;
@@ -44,7 +45,6 @@ export interface CompileRequest {
   model: string;
   force: boolean;
   max_source_chars?: number;
-  chunking?: boolean;
 }
 
 export interface AskRequest {

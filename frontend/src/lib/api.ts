@@ -162,6 +162,13 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  loadModel: (model: string) =>
+    request<{ ok: boolean; model: string }>("/api/load-model", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model }),
+    }),
+
   listFiles: (category: "raw" | "wiki" | "outputs") =>
     request<FilesResponse>(`/api/files/${category}`),
 
@@ -191,4 +198,57 @@ export const api = {
       `/api/trash${category ? `?category=${category}` : ""}`,
       { method: "DELETE" }
     ),
+
+  chatStream: (
+    data: {
+      messages: Array<{
+        role: string;
+        content?: string | null;
+        tool_call_id?: string;
+        name?: string;
+        tool_calls?: unknown;
+      }>;
+      model: string;
+      temperature?: number;
+      max_iters?: number;
+    },
+    onEvent: (event: ChatEvent) => void,
+  ): { promise: Promise<void>; abort: () => void } => {
+    const controller = new AbortController();
+    const promise = (async () => {
+      const res = await fetch(`${API_BASE}/api/chat/stream`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        signal: controller.signal,
+      });
+      if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            onEvent(JSON.parse(line.slice(6)) as ChatEvent);
+          } catch {
+            /* ignore malformed frame */
+          }
+        }
+      }
+    })();
+    return { promise, abort: () => controller.abort() };
+  },
 };
+
+export type ChatEvent =
+  | { type: "tool_call"; name: string; args: Record<string, unknown> }
+  | { type: "tool_result"; name: string; result: string }
+  | { type: "content"; text: string }
+  | { type: "error"; message: string }
+  | { type: "done" };
