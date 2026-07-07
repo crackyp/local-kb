@@ -4,10 +4,10 @@
 
 - Python 3.11+ with packages: `pip install -r requirements.txt`
 - Node.js 18+ (for the web UI)
-- `llama-server.exe` from llama.cpp (default location: `H:\llama.cpp\llama-server.exe`)
-- At least one chat-model GGUF and one embed-model GGUF reachable by tag (see `kb.toml` `[llamacpp.external_gguf_map]` or the Ollama blob store at `H:\ollama\models`)
+- **llama-swap** running on `127.0.0.1:8080` (default). Configure your chat-model aliases in llama-swap's `config.yaml`; the tags listed in `kb.toml [llamacpp] models` must match those aliases.
+- **An embedding server** on `127.0.0.1:11434` (default — Ollama serving `nomic-embed-text` via OpenAI-compat). Any OpenAI-compatible `/v1/embeddings` endpoint works.
 
-By default the app spawns llama-server processes automatically: one for chat on port 8080 (model-swappable) and one for embeddings on port 8081 (fixed model). Set `[llamacpp] auto_spawn = false` in `kb.toml` to manage them yourself.
+Neither server is managed by this app — start them yourself before launching the UI.
 
 ## Environment Variables
 
@@ -16,8 +16,6 @@ By default the app spawns llama-server processes automatically: one for chat on 
 | `KB_API_PORT` | `8000` | FastAPI backend port |
 | `KB_FRONTEND_PORT` | `3000` | Next.js dev server port |
 | `KB_FRONTEND_HOST` | `localhost` | Hostname used in CORS origins |
-| `LLAMACPP_DIR` | `H:\llama.cpp` | Directory containing `llama-server.exe` (used when `[llamacpp] server_exe` is empty) |
-| `OLLAMA_MODELS` | `H:\ollama\models` | Ollama blob store used to resolve tags that aren't in `external_gguf_map` |
 
 Set these before launching to change defaults. The frontend reads `NEXT_PUBLIC_API_BASE` (set automatically by the startup scripts).
 
@@ -26,7 +24,7 @@ Set these before launching to change defaults. The frontend reads `NEXT_PUBLIC_A
 Use the CLI directly — no web server needed.
 
 ```bash
-cd local-kb
+cd GSA-kb
 python scripts/kb.py ingest /path/to/files
 python scripts/kb.py compile
 python scripts/kb.py ask "What is ...?"
@@ -51,7 +49,7 @@ python start-ui.py
 start-ui.bat
 ```
 
-Both scripts run preflight checks first (Python deps, node_modules, ports, llama-server). If checks fail you can still continue.
+Both scripts run preflight checks first (Python deps, node_modules, ports, llama-swap reachability). If checks fail you can still continue.
 
 To use non-default ports:
 ```bash
@@ -76,7 +74,7 @@ npm run build
 npm run start -- --port 3000
 
 # In another terminal — run backend without --reload
-cd local-kb
+cd GSA-kb
 python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
 ```
 
@@ -88,4 +86,4 @@ Run checks independently at any time:
 python preflight.py
 ```
 
-Checks: Python deps, node_modules, port availability, llama-server reachability (or that `llama-server.exe` is available for auto-spawn).
+Checks: Python deps, node_modules, port availability, llama-swap reachability on `[llamacpp] chat_port`.

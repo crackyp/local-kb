@@ -22,12 +22,11 @@ You can do this either from CLI (`scripts/kb.py`) or from the Next.js web UI.
 
 - Windows, macOS, Linux, or WSL
 - Python 3.11+
-- `llama-server.exe` from llama.cpp at `H:\llama.cpp\` (or set `LLAMACPP_DIR`)
-- One or more chat-model GGUFs (`qwopus:v3` is the default) — referenced in `kb.toml` under `[llamacpp.external_gguf_map]` or resolvable via the Ollama blob store at `H:\ollama\models`
-- An embedding GGUF (default tag: `nomic-embed-text:latest`) — required for FAISS retrieval. Set `[faiss] enabled = false` in `kb.toml` to skip and use TF-IDF instead.
+- **llama-swap** running on `127.0.0.1:8080` (default). It fronts `llama-server` and swaps the underlying model based on the request's `model` field. Chat-model aliases listed in `kb.toml [llamacpp] models` must exist in llama-swap's own `config.yaml`.
+- **An embedding server** on `127.0.0.1:11434` (default — Ollama, serving e.g. `nomic-embed-text:latest`). Any OpenAI-compatible `/v1/embeddings` endpoint works. Set `[faiss] enabled = false` in `kb.toml` to skip embeddings and use TF-IDF instead.
 - Optional UI: Node.js 18+
 
-`llama-server` is spawned automatically when needed: a chat process on port 8080 (model-swappable per request) and an embeddings process on port 8081 (fixed model). Disable auto-spawn by setting `[llamacpp] auto_spawn = false` in `kb.toml` and start the servers yourself.
+This app does not manage either server's lifecycle — start llama-swap and your embed server yourself.
 
 ---
 
@@ -35,23 +34,23 @@ You can do this either from CLI (`scripts/kb.py`) or from the Next.js web UI.
 
 ```bash
 git clone https://github.com/crackyp/local-kb.git
-cd local-kb
+cd GSA-kb
 pip install -r requirements.txt
 cd frontend && npm install && cd ..
 ```
 
 Configure `kb.toml`:
-- `[model] default` — default chat tag
-- `[llamacpp] server_exe` — absolute path to `llama-server.exe` (or leave empty and use `$LLAMACPP_DIR`)
-- `[llamacpp.external_gguf_map]` — tag → GGUF path overrides
-- `[faiss] embed_model` — tag for the embedding model
+- `[model] default` — default chat tag (must match an alias in llama-swap's `config.yaml`)
+- `[llamacpp] chat_port` / `embed_port` — where llama-swap and your embed server are listening
+- `[llamacpp] models` — chat-model alias dropdown shown in the UI sidebar
+- `[faiss] embed_model` — tag for the embedding model on the embed server
 
 ---
 
 ## First Run
 
 ```bash
-cd local-kb
+cd GSA-kb
 python scripts/kb.py compile --model qwopus:v3
 python scripts/kb.py ask "What is this project for?" --model qwopus:v3
 python scripts/kb.py lint
@@ -145,7 +144,7 @@ python scripts/kb.py lint
 Open this folder as your vault root:
 
 ```text
-local-kb/kb
+GSA-kb/kb
 ```
 
 ---
@@ -172,27 +171,19 @@ Drop the file into `kb/raw/` (or use the **Files** upload tab) and the next `com
 
 ## Model Tips
 
-- llama-server hosts one model per port. Swapping the chat tag mid-session forces a stop + reload (~3-10 s). Group calls by model when possible.
-- The embedding server stays loaded with one fixed model on its own port — no swap penalty.
-- Suggested tags (with appropriate GGUFs):
-  - `qwopus:v3` — reasoning + tool calling, the default
-  - `gpt-oss:20b` — heavy reasoning (MoE, needs `n_cpu_moe` tuning on 8GB VRAM)
-  - `gemma4:e4b` — balanced general work
-  - `gemma4:e2b` — fast/cheap drafting
-- Per-tag flag tuning lives in `llamacpp_tuned.json` at the project root. Without an entry, safe defaults are used.
+- llama-swap hot-swaps the underlying `llama-server` when the requested tag changes — expect a one-off ~3-10 s reload the first time you hit a new model. Group calls by model when possible.
+- The embedding server stays on its own port with one fixed model — no swap penalty.
+- Per-model flag tuning (gpu layers, batch size, cache types, etc.) lives in llama-swap's `config.yaml`, not in this repo.
 
 ---
 
 ## Troubleshooting
 
-### `llama-server failed for model 'X': process exited (code N)`
-The model failed to load. The error message includes the last 4 KB of stderr — check it for architecture or tensor mismatch errors. If the Ollama blob is incompatible, download a known-good GGUF from HuggingFace and add an entry to `[llamacpp.external_gguf_map]` in `kb.toml`.
+### `llama-swap is not reachable at 127.0.0.1:8080`
+Start llama-swap before launching the UI. Check it's bound to the host/port configured in `kb.toml [llamacpp] host` / `chat_port`.
 
-### `No GGUF mapping or Ollama manifest for 'X'`
-Either add an explicit entry to `[llamacpp.external_gguf_map]` in `kb.toml`, or pull the model via Ollama so its manifest exists at `$OLLAMA_MODELS/manifests/registry.ollama.ai/library/<name>/<version>`.
-
-### `llama-server.exe not found`
-Set `[llamacpp] server_exe` in `kb.toml` to the absolute path, or set the `LLAMACPP_DIR` environment variable.
+### `model 'X' not configured in kb.toml`
+Add the tag to `kb.toml [llamacpp] models` (and make sure llama-swap's `config.yaml` defines a matching alias).
 
 ### `No relevant wiki pages found`
 Compile first:
@@ -213,7 +204,7 @@ python -m pip install -r requirements.txt
 ## Updating from older version
 
 ```bash
-cd local-kb
+cd GSA-kb
 git pull
 python -m pip install -r requirements.txt
 ```

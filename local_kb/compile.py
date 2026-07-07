@@ -123,18 +123,30 @@ def _find_related_pages(text: str, top_k: int) -> list[Path]:
         if scripts_dir not in sys.path:
             sys.path.insert(0, scripts_dir)
         from faiss_index import faiss_available, search_chunks, FAISS_INDEX_FILE
-    except Exception:
+    except Exception as e:
+        print(f"  ! related-page search disabled (FAISS import failed): {e}")
         return []
     if not faiss_available() or not FAISS_INDEX_FILE.exists():
         return []
 
-    query = text[:2000]
+    # Sample several windows so very long documents don't get judged only by
+    # their cover page or TOC. Each window embeds independently via separate
+    # search calls is too costly; instead concatenate windows into one query.
+    windows: list[str] = [text[:2000]]
+    if len(text) > 6000:
+        mid = len(text) // 2
+        windows.append(text[mid : mid + 2000])
+    if len(text) > 4000:
+        windows.append(text[-2000:])
+    query = "\n\n".join(windows)
+
     cfg = dict(CFG)
     cfg["faiss"] = dict(cfg["faiss"])
     cfg["faiss"]["top_k"] = max(top_k * 4, 20)
     try:
         results = search_chunks(query, cfg)
-    except Exception:
+    except Exception as e:
+        print(f"  ! related-page search failed: {e}")
         return []
     if not results:
         return []
@@ -433,6 +445,33 @@ def compile_one_source(path: Path, model: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Mid-loop FAISS refresh so the next source can find pages just written
+# ---------------------------------------------------------------------------
+
+
+def _refresh_faiss_incremental() -> None:
+    """Incrementally bring FAISS up to date with the current wiki contents.
+
+    Called between sources in compile_documents so that file N+1 can find
+    pages produced by file N. Relies on the FAISS module's own incremental
+    update path (which diffs page hashes and only embeds what changed).
+    Errors are logged but never raised — a stale FAISS shouldn't abort compile.
+    """
+    if not CFG["faiss"].get("enabled", True):
+        return
+    try:
+        import sys
+        scripts_dir = str((WIKI.parent.parent / "scripts").resolve())
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        from faiss_index import faiss_available, build_faiss_index
+        if faiss_available():
+            build_faiss_index(CFG)
+    except Exception as e:
+        print(f"  ! FAISS incremental refresh failed: {e}")
+
+
+# ---------------------------------------------------------------------------
 # Top-level orchestration
 # ---------------------------------------------------------------------------
 
@@ -449,10 +488,11 @@ def compile_documents(
     changed_pages (set), deleted_pages (list).
     """
     ensure_dirs()
-    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+    if not ping_llamacpp():
         raise RuntimeError(
-            "llama-server is not running and auto_spawn is disabled. "
-            "Start it manually or enable [llamacpp] auto_spawn in kb.toml."
+            f"llama-swap is not reachable at "
+            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}. "
+            "Start it and try again."
         )
 
     if max_source_chars is not None:
@@ -474,72 +514,73 @@ def compile_documents(
     deleted_wiki_pages: list[str] = []
     skipped: list[tuple[str, str]] = []
 
-    for path in raw_files:
-        rel_name = str(path.relative_to(RAW))
-        try:
-            text = _read_source_text(path)
-        except Exception as e:
-            print(f"! Skipping {rel_name}: {e}")
-            skipped.append((rel_name, str(e)))
-            continue
-        if not text.strip():
-            continue
-
-        digest = sha256_text(text)
-        prev = state["compiled"].get(rel_name)
-        if prev == digest and not force:
-            continue
-
-        try:
-            result = compile_one_source(path, model=model)
-        except Exception as e:
-            print(f"! Compile failed for {rel_name}: {e}")
-            skipped.append((rel_name, str(e)))
-            continue
-
-        if result["reasoning"]:
-            print(f"  -> {result['reasoning']}")
-        if result["deleted_pages"]:
-            print(f"  -> soft-deleted: {', '.join(result['deleted_pages'])}")
-
-        changed_wiki_pages |= result["changed_pages"]
-        deleted_wiki_pages.extend(result["deleted_pages"])
-
-        state["compiled"][rel_name] = digest
-        docs_index[rel_name] = {
-            "sha256": digest,
-            "updated_at": dt.datetime.now().isoformat(),
-        }
-        compiled_now += 1
-
-        save_json(STATE_FILE, state)
-        save_json(DOC_INDEX_FILE, docs_index)
-
-    if changed_wiki_pages or deleted_wiki_pages:
-        from .links import resolve_page_file
-        for page_name in changed_wiki_pages:
-            page_path = WIKI / page_name
-            if page_path.exists():
-                resolve_page_file(page_path)
-
-        # If anything was deleted we touch the full index so removed pages drop out.
-        if deleted_wiki_pages:
-            build_wiki_index(None)
-        else:
-            build_wiki_index(None if force else changed_wiki_pages)
-
-        if CFG["faiss"].get("enabled", True):
+    try:
+        for path in raw_files:
+            rel_name = str(path.relative_to(RAW))
             try:
-                import sys
-                scripts_dir = str((WIKI.parent.parent / "scripts").resolve())
-                if scripts_dir not in sys.path:
-                    sys.path.insert(0, scripts_dir)
-                from faiss_index import faiss_available, build_faiss_index
-                if faiss_available():
-                    print("Updating FAISS index...")
-                    build_faiss_index(CFG)
+                text = _read_source_text(path)
             except Exception as e:
-                print(f"FAISS auto-index skipped: {e}")
+                print(f"! Skipping {rel_name}: {e}")
+                skipped.append((rel_name, str(e)))
+                continue
+            if not text.strip():
+                continue
+
+            digest = sha256_text(text)
+            prev = state["compiled"].get(rel_name)
+            if prev == digest and not force:
+                continue
+
+            try:
+                result = compile_one_source(path, model=model)
+            except Exception as e:
+                print(f"! Compile failed for {rel_name}: {e}")
+                skipped.append((rel_name, str(e)))
+                continue
+
+            if result["reasoning"]:
+                print(f"  -> {result['reasoning']}")
+            if result["deleted_pages"]:
+                print(f"  -> soft-deleted: {', '.join(result['deleted_pages'])}")
+
+            changed_wiki_pages |= result["changed_pages"]
+            deleted_wiki_pages.extend(result["deleted_pages"])
+
+            state["compiled"][rel_name] = digest
+            docs_index[rel_name] = {
+                "sha256": digest,
+                "updated_at": dt.datetime.now().isoformat(),
+            }
+            compiled_now += 1
+
+            save_json(STATE_FILE, state)
+            save_json(DOC_INDEX_FILE, docs_index)
+
+            # Refresh FAISS so the NEXT source's related-page search can see
+            # the pages we just wrote. Without this, batch runs treat every
+            # source as a fresh topic because FAISS is frozen at the start.
+            if result["changed_pages"] or result["deleted_pages"]:
+                _refresh_faiss_incremental()
+    finally:
+        # Always flush wiki-index + FAISS, even if compile was cancelled or
+        # an exception escaped, so subsequent runs don't start from a stale
+        # FAISS that omits pages already written to disk.
+        if changed_wiki_pages or deleted_wiki_pages:
+            from .links import resolve_page_file
+            for page_name in changed_wiki_pages:
+                page_path = WIKI / page_name
+                if page_path.exists():
+                    resolve_page_file(page_path)
+
+            # If anything was deleted we touch the full index so removed pages drop out.
+            if deleted_wiki_pages:
+                build_wiki_index(None)
+            else:
+                build_wiki_index(None if force else changed_wiki_pages)
+
+            # Final FAISS sweep — usually a no-op because the in-loop refresh
+            # kept things current, but cheap insurance against missed updates.
+            _refresh_faiss_incremental()
 
     return {
         "compiled": compiled_now,

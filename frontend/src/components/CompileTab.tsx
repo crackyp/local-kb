@@ -17,7 +17,7 @@ export function CompileTab() {
   const { model, refresh: refreshStatus } = useStatus();
   const { compiling, liveLines, result, startCompile, stopCompile } = useCompile();
   const [force, setForce] = useState(false);
-  const [maxChars, setMaxChars] = useState(55000);
+  const [maxChars, setMaxChars] = useState(192000);
   const [idxForce, setIdxForce] = useState(false);
   const [indexResult, setIndexResult] = useState<CommandResponse | null>(null);
   const [indexing, setIndexing] = useState(false);
@@ -58,11 +58,11 @@ export function CompileTab() {
           <div>
             <label className="text-xs text-slate-500">Max source chars</label>
             <select value={maxChars} onChange={(e) => setMaxChars(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 border rounded-lg text-sm bg-white">
-              <option value={16000}>16K (small context)</option>
               <option value={32000}>32K</option>
-              <option value={55000}>55K (default)</option>
+              <option value={55000}>55K</option>
               <option value={100000}>100K</option>
-              <option value={200000}>200K (large context)</option>
+              <option value={192000}>192K (default)</option>
+              <option value={250000}>250K (large context)</option>
             </select>
           </div>
           <div className="flex flex-col gap-2 pt-5">

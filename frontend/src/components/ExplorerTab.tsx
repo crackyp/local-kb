@@ -7,6 +7,7 @@ import { useFileList } from "@/lib/hooks";
 import type { FileMeta } from "@/types";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { downloadWikiHtml } from "@/lib/exportHtml";
 
 type Category = "raw" | "wiki" | "outputs";
 
@@ -230,7 +231,17 @@ export function ExplorerTab() {
                 <div className="text-xs text-slate-400 truncate">{selected.name}</div>
               )}
             </div>
-            <span className="text-xs text-slate-400 whitespace-nowrap ml-3">{selected.size_h} | {selected.modified_h}</span>
+            <div className="flex items-center gap-3 ml-3 whitespace-nowrap">
+              {content && (activeTab === "wiki" || selected.name.endsWith(".md")) && (
+                <button
+                  onClick={() => downloadWikiHtml(selected.title || selected.name, selected.name, content)}
+                  className="text-xs px-2.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  Download HTML
+                </button>
+              )}
+              <span className="text-xs text-slate-400">{selected.size_h} | {selected.modified_h}</span>
+            </div>
           </div>
           {contentLoading ? (
             <div className="text-sm text-slate-400 bg-slate-50 rounded-lg p-4">
@@ -274,12 +285,12 @@ export function ExplorerTab() {
                     },
                   }}
                 >
-                  {content.length > 15000 ? content.slice(0, 15000) + "\n\n...(truncated)" : content}
+                  {content.length > 100000 ? content.slice(0, 100000) + "\n\n...(truncated)" : content}
                 </ReactMarkdown>
               </div>
             ) : (
               <pre className="text-xs text-slate-600 bg-slate-50 rounded-lg p-4 max-h-[60vh] overflow-auto whitespace-pre-wrap">
-                {content.length > 15000 ? content.slice(0, 15000) + "\n\n...(truncated)" : content}
+                {content.length > 100000 ? content.slice(0, 100000) + "\n\n...(truncated)" : content}
               </pre>
             )
           ) : (

@@ -2,17 +2,17 @@
 
 ## What This Is
 
-A local-first personal knowledge base. Raw source material goes into `kb/raw/`, an LLM (via llama.cpp / `llama-server.exe`) compiles it into organized wiki pages in `kb/wiki/`, and Q&A answers are saved to `kb/outputs/`. Everything is markdown. There is a Next.js web UI for all operations.
+A local-first personal knowledge base. Raw source material goes into `kb/raw/`, an LLM (served by llama-swap fronting llama.cpp) compiles it into organized wiki pages in `kb/wiki/`, and Q&A answers are saved to `kb/outputs/`. Everything is markdown. There is a Next.js web UI for all operations.
 
 ## Architecture
 
 ```
-local-kb/
+GSA-kb/
   scripts/
     kb.py              # CLI entry point (all commands)
     faiss_index.py     # FAISS semantic indexing (chunking, embedding, search)
-  local_kb/            # Core Python package (compile, ingest, retrieval, health, llamacpp runtime, etc.)
-    llamacpp.py        # llama-server lifecycle + OpenAI-compatible HTTP client
+  local_kb/            # Core Python package (compile, ingest, retrieval, health, llamacpp client, etc.)
+    llamacpp.py        # OpenAI-compatible HTTP client + reachability probe (no process management)
   backend/
     app.py             # FastAPI backend (default port 8765), wraps CLI as subprocess
   frontend/
@@ -26,10 +26,16 @@ local-kb/
     wiki/              # AI-maintained wiki pages. Never hand-edit.
     outputs/           # Q&A answers, health-check reports
     index/             # Internal state (state.json, docs.json, wiki_index.json, FAISS files)
-  kb.toml              # All configuration (model, timeouts, char limits, FAISS, [llamacpp] runtime)
-  llamacpp_tuned.json  # (optional) per-tag llama-server flag overrides
+  kb.toml              # All configuration (model, timeouts, char limits, FAISS, [llamacpp] client)
   start-ui.py          # Launches backend + frontend together
 ```
+
+## External services (not managed by this app)
+
+- **llama-swap** on `127.0.0.1:8080` (default) — hot-swaps the underlying `llama-server.exe` based on each request's `model` field. The aliases listed in `kb.toml [llamacpp] models` must match aliases defined in llama-swap's own `config.yaml`. Per-model flag tuning (gpu layers, batch size, cache types) lives in that config too — not in this repo.
+- **Embed server** on `127.0.0.1:11434` (default — Ollama serving `nomic-embed-text` via OpenAI-compat).
+
+Both must be started before launching the UI. `local_kb/llamacpp.py` only provides the HTTP client and a reachability probe (`ping()` / `loaded_model()`); it never spawns or stops anything.
 
 ## Key Data Flows
 
@@ -61,15 +67,15 @@ All in `scripts/kb.py`: `ingest`, `ingest-url`, `ingest-pdf`, `compile`, `ask`, 
 All tunables are in `kb.toml`. The code has fallback defaults in `DEFAULTS` dict at the top of `kb.py`. The toml values override the code defaults.
 
 Key settings:
-- `[model] default` — default chat model tag (e.g. `qwopus:v3`)
+- `[model] default` — default chat model tag (must match a llama-swap alias)
 - `[compile] max_source_chars` — how much source text to send per LLM call (UI-adjustable)
 - `[faiss] enabled` — toggle FAISS vs TF-IDF
-- `[faiss] embed_model` — embedding model tag (loaded on the dedicated embed server)
+- `[faiss] embed_model` — embedding model tag (must match a model loaded on the embed server)
 - `[llamacpp] timeout` — seconds per LLM call
-- `[llamacpp] auto_spawn` — when true, the app spawns `llama-server.exe` on demand
-- `[llamacpp] chat_port` / `embed_port` — separate llama-server processes (one per port). Chat is model-swappable; embed stays loaded with one fixed model.
-- `[llamacpp] server_exe` — absolute path to `llama-server.exe` (else uses `$LLAMACPP_DIR\llama-server.exe`)
-- `[llamacpp.external_gguf_map]` — tag → GGUF path overrides for models whose Ollama blob is incompatible with upstream llama.cpp
+- `[llamacpp] host` — host where both servers are listening (typically `127.0.0.1`)
+- `[llamacpp] chat_port` — llama-swap port (default 8080); model is selected per-request
+- `[llamacpp] embed_port` — embed server port (default 11434, Ollama)
+- `[llamacpp] models` — list of chat aliases shown in the UI dropdown
 
 ## State Files (kb/index/)
 

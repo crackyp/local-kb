@@ -13,19 +13,18 @@ if errorlevel 1 (
     echo.
     echo Preflight failed. Fix the [FAIL] items above before launching.
     echo - For port conflicts, set KB_API_PORT / KB_FRONTEND_PORT.
-    echo - For llama-server, install llama.cpp at H:\llama.cpp or set LLAMACPP_DIR,
-    echo   or edit [llamacpp] server_exe in kb.toml.
+    echo - For the chat backend, start llama-swap ^(e.g. H:\llama-swap^).
     pause
     exit /b 1
 )
 echo.
-echo Starting Local KB UI (llama.cpp backend)...
+echo Starting Local KB UI (llama-swap backend)...
 echo   Backend:  http://127.0.0.1:%KB_API_PORT%
 echo   Frontend: http://localhost:%KB_FRONTEND_PORT%
 echo.
-echo Expecting llama-server already running (auto_spawn disabled):
-echo   - chat    on 127.0.0.1:8080
-echo   - embeds  on 127.0.0.1:8081
+echo Expecting these to already be running:
+echo   - llama-swap (chat)   on 127.0.0.1:8080
+echo   - Ollama     (embeds) on 127.0.0.1:11434
 echo.
 
 set NEXT_PUBLIC_API_BASE=http://127.0.0.1:%KB_API_PORT%

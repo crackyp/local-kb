@@ -138,10 +138,11 @@ def cmd_compile(args):
 
 def cmd_ask(args):
     ensure_dirs()
-    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+    if not ping_llamacpp():
         raise RuntimeError(
-            "llama-server is not running and auto_spawn is disabled. "
-            "Start it manually or enable [llamacpp] auto_spawn in kb.toml."
+            f"llama-swap is not reachable at "
+            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}. "
+            "Start it and try again."
         )
 
     context = None
@@ -193,10 +194,11 @@ WIKI CONTEXT:
 
 def cmd_index(args):
     ensure_dirs()
-    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+    if not ping_llamacpp():
         raise RuntimeError(
-            "llama-server is not running and auto_spawn is disabled. "
-            "Start it manually or enable [llamacpp] auto_spawn in kb.toml."
+            f"llama-swap is not reachable at "
+            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}. "
+            "Start it and try again."
         )
     try:
         from faiss_index import faiss_available, build_faiss_index

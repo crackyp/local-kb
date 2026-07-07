@@ -16,10 +16,11 @@ def health_check(model: str) -> dict:
     page_count (int).
     """
     ensure_dirs()
-    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+    if not ping_llamacpp():
         raise RuntimeError(
-            "llama-server is not running and auto_spawn is disabled. "
-            "Start it manually or enable [llamacpp] auto_spawn in kb.toml."
+            f"llama-swap is not reachable at "
+            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}. "
+            "Start it and try again."
         )
 
     pages = sorted(WIKI.glob("*.md"))

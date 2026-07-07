@@ -686,7 +686,7 @@ def chat_stream(
     messages: list[dict],
     model: str,
     temperature: float = 0.3,
-    max_iters: int = 10,
+    max_iters: int = 1000,
 ) -> Iterator[dict]:
     """Run a tool-call loop and yield SSE-friendly events.
 

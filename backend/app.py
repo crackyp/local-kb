@@ -107,7 +107,7 @@ class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     model: str = CFG["model"]["default"]
     temperature: float = 0.3
-    max_iters: int = 10
+    max_iters: int = 1000
 
 
 class IndexRequest(BaseModel):
@@ -538,11 +538,12 @@ async def compile_stream(data: CompileRequest):
 @app.post("/api/index")
 async def build_index(data: IndexRequest):
     ensure_dirs()
-    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+    if not ping_llamacpp():
         _error_response(
             "LLAMACPP_NOT_RUNNING",
-            "llama-server is not running and auto_spawn is disabled. "
-            "Start it manually or enable [llamacpp] auto_spawn in kb.toml.",
+            f"llama-swap is not reachable at "
+            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}. "
+            "Start it and try again.",
         )
 
     try:
@@ -576,11 +577,12 @@ async def build_index(data: IndexRequest):
 @app.post("/api/ask")
 async def ask_wiki(data: AskRequest):
     ensure_dirs()
-    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+    if not ping_llamacpp():
         _error_response(
             "LLAMACPP_NOT_RUNNING",
-            "llama-server is not running and auto_spawn is disabled. "
-            "Start it manually or enable [llamacpp] auto_spawn in kb.toml.",
+            f"llama-swap is not reachable at "
+            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}. "
+            "Start it and try again.",
         )
 
     models = llamacpp_models()
@@ -798,10 +800,11 @@ async def api_load_model(data: LoadModelRequest):
     This endpoint fires a 1-token completion to trigger the swap explicitly so
     the "loaded:" status line matches what the user picked.
     """
-    if not ping_llamacpp() and not CFG["llamacpp"].get("auto_spawn", True):
+    if not ping_llamacpp():
         _error_response(
             "LLAMACPP_NOT_RUNNING",
-            "llama-server is not running and auto_spawn is disabled.",
+            f"llama-swap is not reachable at "
+            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}.",
             503,
         )
     try:

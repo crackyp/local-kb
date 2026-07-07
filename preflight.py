@@ -93,39 +93,26 @@ def check_port_free(port: int, label: str) -> bool:
 
 
 def check_llamacpp() -> bool:
-    """Check that llama-server is reachable (or that the executable exists for auto-spawn)."""
+    """Check that llama-swap is reachable on the configured chat port."""
     sys.path.insert(0, str(ROOT))
     try:
         from local_kb.config import CFG
-        from local_kb import llamacpp as _llama
     except Exception as e:
-        _warn(f"could not import local_kb.llamacpp: {e}")
+        _warn(f"could not import local_kb.config: {e}")
         return False
 
     cfg = CFG["llamacpp"]
     chat_url = f"http://{cfg['host']}:{cfg['chat_port']}/health"
     try:
         with urllib.request.urlopen(chat_url, timeout=3):
-            _ok(f"llama-server reachable at http://{cfg['host']}:{cfg['chat_port']}")
+            _ok(f"llama-swap reachable at http://{cfg['host']}:{cfg['chat_port']}")
             return True
     except Exception:
-        pass
-
-    if cfg.get("auto_spawn", True):
-        exe = _llama._server_exe()
-        if os.path.isfile(exe):
-            _ok(f"llama-server.exe found at {exe} (auto-spawn enabled)")
-            return True
         _warn(
-            f"llama-server.exe not found at {exe} — LLM features will not work. "
-            "Set [llamacpp] server_exe in kb.toml or LLAMACPP_DIR env var."
+            f"llama-swap not reachable at http://{cfg['host']}:{cfg['chat_port']} — "
+            "start it (e.g. H:\\llama-swap) before launching the UI."
         )
         return False
-    _warn(
-        f"llama-server not reachable at http://{cfg['host']}:{cfg['chat_port']} "
-        "and auto_spawn is disabled"
-    )
-    return False
 
 
 def run_checks() -> bool:

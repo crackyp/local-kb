@@ -1,8 +1,8 @@
-# Local KB (llama.cpp)
+# Local KB (llama-swap)
 
 A local-first personal knowledge base compiler.
 
-You collect source material in `kb/raw/`, run a compile step with a local LLM (llama.cpp), and get linked wiki pages in `kb/wiki/`. Then you can run Q&A over the wiki and save outputs as markdown.
+You collect source material in `kb/raw/`, run a compile step with a local LLM (served by llama-swap fronting llama.cpp), and get linked wiki pages in `kb/wiki/`. Then you can run Q&A over the wiki and save outputs as markdown.
 
 ## What it does
 
@@ -18,7 +18,7 @@ You collect source material in `kb/raw/`, run a compile step with a local LLM (l
 ## Repo layout
 
 ```text
-local-kb/
+GSA-kb/
   kb/
     raw/          # source docs
       assets/     # downloaded images from URL ingest
@@ -34,7 +34,6 @@ local-kb/
   start-ui.py           # starts both backend and frontend
   start-ui.bat          # Windows launcher
   kb.toml               # configuration
-  llamacpp_tuned.json   # (optional) per-tag llama-server flag overrides
   requirements.txt
 ```
 
@@ -42,17 +41,16 @@ local-kb/
 
 - Python 3.11+ with `pip install -r requirements.txt`
 - Node.js 18+ (for the web UI)
-- `llama-server.exe` from llama.cpp at `H:\llama.cpp\` (override with the `LLAMACPP_DIR` env var or `[llamacpp] server_exe` in `kb.toml`)
-- One or more GGUF models available — either via the Ollama blob store at `H:\ollama\models` (resolved by tag) or as standalone files referenced from `[llamacpp.external_gguf_map]` in `kb.toml`
-- An embedding GGUF (e.g. `nomic-embed-text:latest`) for FAISS — or set `[faiss] enabled = false` in `kb.toml` to fall back to TF-IDF
+- **llama-swap** running on `127.0.0.1:8080` (default). llama-swap fronts `llama-server.exe` and hot-swaps the underlying model based on the request's `model` field, so a single port serves every chat tag in `kb.toml [llamacpp] models`. Aliases are configured in llama-swap's own `config.yaml`.
+- **An embedding server** on `127.0.0.1:11434` (default — Ollama). Anything OpenAI-compatible at `/v1/embeddings` works. Or set `[faiss] enabled = false` in `kb.toml` to skip embeddings entirely and use TF-IDF.
 
-The app spawns `llama-server.exe` automatically when needed. Two server processes are used: one for chat (default port 8080, model-swappable per request) and one for embeddings (default port 8081, fixed model). Set `[llamacpp] auto_spawn = false` if you prefer to start servers manually.
+This app does not manage either server's lifecycle — start them yourself before launching the UI. The preflight check probes the chat port and warns if it isn't reachable.
 
 ## 2) Quick start
 
 ```bash
 git clone https://github.com/crackyp/local-kb.git
-cd local-kb
+cd GSA-kb
 pip install -r requirements.txt
 cd frontend && npm install && cd ..
 python start-ui.py
@@ -118,7 +116,7 @@ See: [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)
 - This is local-first. Nothing leaves your machine — all LLM and embedding calls go to `127.0.0.1`.
 - `compile` is incremental by default; use `--force` to recompile everything.
 - `ask` writes markdown files to `kb/outputs/` so your research trail stays in the vault.
-- llama-server only loads one model per port. Swapping the chat tag mid-session forces a stop + reload (~3-10 s).
+- llama-swap hot-swaps the underlying `llama-server` when the requested tag changes — expect a one-off ~3-10 s reload the first time you hit a new model.
 
 ## License
 

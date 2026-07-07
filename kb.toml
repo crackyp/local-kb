@@ -2,40 +2,31 @@
 # Edit these values to customise behaviour. Delete any line to use its default.
 
 [model]
-default = "qwen3-6_27b_turbo"
+default = "qwen3.6-27b-full"
 
 [llamacpp]
 host = "127.0.0.1"
-chat_port = 8080         # llama-swap (H:\llama-swap)
-embed_port = 11434       # Ollama (serves nomic-embed-text via OpenAI-compat /v1/embeddings)
-timeout = 480              # seconds per LLM call
-auto_spawn = false         # use whatever llama-server is already running; never spawn
-startup_timeout = 90       # seconds to wait for /health after spawn
-server_exe = ""            # absolute path to llama-server.exe; empty -> $LLAMACPP_DIR\llama-server.exe (default: H:\llama.cpp)
-ollama_models_dir = ""     # Ollama blob store for tag resolution; empty -> $OLLAMA_MODELS or H:\ollama\models
-# Tag dropdown shown in the UI sidebar.
-# These names are aliases configured in H:\llama-swap\config.yaml; the
-# llama-swap proxy on chat_port hot-swaps the underlying llama-server.
+chat_port = 8080           # llama-swap (H:\llama-swap) — hot-swaps models behind one port
+embed_port = 11434         # Ollama (serves nomic-embed-text via OpenAI-compat /v1/embeddings)
+timeout = 1200             # seconds per LLM call
+# Tag dropdown shown in the UI sidebar. These names are aliases configured
+# in H:\llama-swap\config.yaml; sending one as the "model" field tells
+# llama-swap which underlying llama-server to load.
 models = [
+  "qwen3.6-27b-full",
   "qwen3-6_27b_turbo",
   "qwopus:3.6-35b-A3B-v1",
   "gemma4:e4b",
 ]
-# Tag -> GGUF path overrides. Only consulted when auto_spawn = true; with
-# auto_spawn = false llama-swap owns model resolution, so this is informational.
-[llamacpp.external_gguf_map]
-"gemma4:e4b"   = "H:\\LLMs\\gemma-4-E4B-it-Q6_K.gguf"
-"qwen3-6_27b_turbo" = "H:\\LLMs\\Qwen3.6-27B-GGUF\\Qwen3.6-27B-Q4_K_M.gguf"
-"qwopus:3.6-35b-A3B-v1" = "H:\\LLMs\\Qwopus3.6-35B-A3B-v1-Q4_K_M.gguf"
 
 [compile]
 temperature = 0.2
-max_source_chars = 100000  # chars sent to the LLM per source doc
+max_source_chars = 250000  # chars sent to the LLM per source doc
 related_pages_top_k = 5    # how many similar existing wiki pages to feed into the compile prompt
 
 [ask]
 temperature = 0.1
-context_per_page = 8000   # chars loaded per wiki page
+context_per_page = 30000  # chars loaded per wiki page
 default_limit = 6         # number of wiki pages to include
 
 [ingest]
@@ -45,6 +36,6 @@ max_content_chars = 120000  # URL / non-PDF content truncation limit
 embed_model = "nomic-embed-text:latest"
 chunk_size = 1200           # characters per chunk
 chunk_overlap = 200         # overlap between consecutive chunks
-context_budget = 35000      # max total chars assembled for LLM prompt
+context_budget = 200000     # max total chars assembled for LLM prompt
 top_k = 50                  # max chunks to retrieve from FAISS
 enabled = true              # set false to always use TF-IDF

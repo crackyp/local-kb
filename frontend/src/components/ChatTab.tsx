@@ -68,7 +68,7 @@ export function ChatTab() {
     let assistantText = "";
 
     const { promise, abort } = api.chatStream(
-      { messages: nextWire, model, temperature: 0.3, max_iters: 10 },
+      { messages: nextWire, model, temperature: 0.3, max_iters: 1000 },
       (ev: ChatEvent) => {
         if (ev.type === "tool_call") {
           collectedTools.push({ name: ev.name, args: ev.args });
