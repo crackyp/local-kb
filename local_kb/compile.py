@@ -509,6 +509,13 @@ def compile_documents(
 
     raw_files = sorted([p for p in RAW.glob("**/*") if should_compile_file(p)])
 
+    # Build content-hash -> path reverse lookup so we can detect moved files.
+    # If two old entries share the same hash (duplicates), the first one wins.
+    hash_to_old_path: dict[str, str] = {}
+    for old_rel, old_hash in state["compiled"].items():
+        if old_hash not in hash_to_old_path:
+            hash_to_old_path[old_hash] = old_rel
+
     compiled_now = 0
     changed_wiki_pages: set[str] = set()
     deleted_wiki_pages: list[str] = []
@@ -527,8 +534,20 @@ def compile_documents(
                 continue
 
             digest = sha256_text(text)
-            prev = state["compiled"].get(rel_name)
-            if prev == digest and not force:
+
+            # Content-addressable skip: already compiled under this or another path?
+            old_path = hash_to_old_path.get(digest)
+            if old_path is not None and not force:
+                if old_path != rel_name:
+                    # File was moved — update state to the new path, remove the old.
+                    old_hash = state["compiled"].pop(old_path, None)
+                    state["compiled"][rel_name] = old_hash
+                    if old_path in docs_index:
+                        docs_index[rel_name] = docs_index.pop(old_path)
+                    hash_to_old_path[digest] = rel_name
+                    print(f"  (moved) {old_path} -> {rel_name}  (already compiled, skipping)")
+                else:
+                    print(f"  (skipped) {rel_name}  (unchanged)")
                 continue
 
             try:
@@ -547,6 +566,7 @@ def compile_documents(
             deleted_wiki_pages.extend(result["deleted_pages"])
 
             state["compiled"][rel_name] = digest
+            hash_to_old_path[digest] = rel_name
             docs_index[rel_name] = {
                 "sha256": digest,
                 "updated_at": dt.datetime.now().isoformat(),
