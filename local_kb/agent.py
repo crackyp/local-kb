@@ -656,9 +656,9 @@ def _run_tool(name: str, args: dict) -> str:
 
 
 SYSTEM_PROMPT = (
-    "You are a helpful assistant working in a personal knowledge base at "
-    "H:\\programz\\knowledge\\local-kb. You have read access to the whole "
-    "project and write access to kb/wiki/ and kb/outputs/.\n\n"
+    f"You are a helpful assistant working in a personal knowledge base at "
+    f"{ROOT}. You have read access to the whole project "
+    f"and write access to kb/wiki/ and kb/outputs/.\n\n"
     "Read tools: list_dir, read_file, glob_files, grep_files, wiki_search. "
     "Prefer wiki_search for compiled-knowledge questions and the filesystem "
     "tools for code or raw-source questions. Cite file paths when you "

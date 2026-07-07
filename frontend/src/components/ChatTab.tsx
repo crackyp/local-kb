@@ -31,7 +31,7 @@ interface WireMessage {
 
 const PLACEHOLDER =
   "Ask about anything in this project — files, code, the wiki, or the raw sources. " +
-  "The agent has read-only access to H:\\programz\\knowledge\\local-kb.";
+  "The agent has read access to all project files and can search the wiki.";
 
 export function ChatTab() {
   const { model } = useStatus();
