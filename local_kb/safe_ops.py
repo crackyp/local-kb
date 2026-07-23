@@ -15,6 +15,25 @@ CATEGORY_BASES = {
 }
 
 
+def _category_base(category: str) -> Path:
+    base = CATEGORY_BASES.get(category)
+    if base is None:
+        raise ValueError(f"Invalid category: {category}")
+    return base
+
+
+def _safe_trash_path(category: str, name: str) -> Path:
+    if Path(name).name != name or name in {"", ".", ".."}:
+        raise ValueError("Invalid trash file name")
+    trash_dir = (TRASH / category).resolve()
+    path = (trash_dir / name).resolve()
+    try:
+        path.relative_to(trash_dir)
+    except ValueError:
+        raise ValueError("Invalid trash file path")
+    return path
+
+
 def soft_delete(file_path: Path, category: str) -> Path:
     """Move a file to kb/.trash/ instead of permanently deleting it.
 
@@ -23,6 +42,7 @@ def soft_delete(file_path: Path, category: str) -> Path:
 
     Trash layout: kb/.trash/<category>/<timestamp>_<original_name>
     """
+    _category_base(category)
     ensure_dirs()
     trash_dir = TRASH / category
     trash_dir.mkdir(parents=True, exist_ok=True)
@@ -41,6 +61,8 @@ def list_trash(category: str | None = None) -> list:
     Returns list of dicts: {name, original_name, category, trashed_at, size, path}.
     """
     results = []
+    if category is not None:
+        _category_base(category)
     categories = [category] if category else list(CATEGORY_BASES.keys())
 
     for cat in categories:
@@ -76,13 +98,10 @@ def restore_from_trash(trash_file_name: str, category: str) -> Path:
 
     Returns the restored file path.
     """
-    trash_path = TRASH / category / trash_file_name
+    base = _category_base(category)
+    trash_path = _safe_trash_path(category, trash_file_name)
     if not trash_path.exists():
         raise FileNotFoundError(f"Trash file not found: {trash_path}")
-
-    base = CATEGORY_BASES.get(category)
-    if not base:
-        raise ValueError(f"Invalid category: {category}")
 
     # Extract original name from <YYYYMMDD-HHMMSS>_<original_name>
     parts = trash_file_name.split("_", 1)
@@ -98,6 +117,8 @@ def restore_from_trash(trash_file_name: str, category: str) -> Path:
 
 def empty_trash(category: str | None = None):
     """Permanently delete all files in the trash, optionally filtered by category."""
+    if category is not None:
+        _category_base(category)
     categories = [category] if category else list(CATEGORY_BASES.keys())
     removed = 0
     for cat in categories:

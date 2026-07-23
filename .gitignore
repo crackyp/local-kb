@@ -19,6 +19,7 @@ llamacpp_tuned.json
 *~
 
 # Local runtime artifacts (keep directory skeleton only)
+kb/.trash/
 kb/raw/*
 !kb/raw/.gitkeep
 !kb/raw/assets/

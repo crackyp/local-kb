@@ -52,6 +52,10 @@ function getTopFolder(rel: string): string | null {
   return i >= 0 ? normalized.slice(0, i) : null;
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 interface Toast { id: number; message: string; type: "info" | "success" | "error" | "undo"; undoAction?: () => void; undoLabel?: string; }
 let toastIdCounter = 0;
 
@@ -98,13 +102,14 @@ function TrashDrawer({ open, onClose, onRestore, onEmptyTrash }: {
 
   const handleRestore = async (item: TrashItem) => {
     try {
-      await api.restoreTrash(item.original_name, item.category);
+      await api.restoreTrash(item.name, item.category);
       setTrashItems(p => p.filter(t => !(t.original_name === item.original_name && t.category === item.category)));
       onRestore();
-    } catch (e: any) {
-      if (e.message?.includes("ALREADY_EXISTS") || e.message?.includes("409")) {
+    } catch (e: unknown) {
+      const message = errorMessage(e);
+      if (message.includes("ALREADY_EXISTS") || message.includes("409")) {
         setError(`"${item.original_name}" already exists in ${item.category}/ — rename or delete the current one first.`);
-      } else { setError(String(e)); }
+      } else { setError(message); }
     }
   };
   const handleEmpty = async () => {
@@ -305,7 +310,10 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
   const wiki = useFileList("wiki");
   const raw = useFileList("raw");
   const outputs = useFileList("outputs");
-  const lists: Record<Category, ReturnType<typeof useFileList>> = { wiki, raw, outputs };
+  const lists = useMemo<Record<Category, ReturnType<typeof useFileList>>>(
+    () => ({ wiki, raw, outputs }),
+    [wiki, raw, outputs],
+  );
   const active = lists[activeTab];
 
   // ── Phase 3: Filter chips (needs `active`) ────────────────
@@ -318,7 +326,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }, [active.files]);
 
-  useEffect(() => { CATEGORIES.forEach((cat) => lists[cat].refresh()); }, []);
+  useEffect(() => { CATEGORIES.forEach((cat) => lists[cat].refresh()); }, [lists]);
   useEffect(() => { if (wiki.files.length > 0) setWikiFiles(wiki.files); }, [wiki.files]);
 
   // ── Phase 3: URL sync ─────────────────────────────────────
@@ -378,7 +386,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
         if (effectiveSort === "largest") return b.size - a.size;
         return 0;
       });
-  }, [active.files, filter, effectiveSort]);
+  }, [active.files, filter, filterChip, effectiveSort, activeTab]);
 
   const groupedFiles = useMemo(() => {
     if (activeTab !== "raw") return null;
@@ -401,7 +409,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
     }
     if (!folderCollapsed["__ungrouped__"]) addFiles(groupedFiles.ungrouped);
     return result;
-  }, [groupedFiles, folderCollapsed]);
+  }, [groupedFiles, filteredFiles, folderCollapsed]);
 
   const addToast = useCallback((message: string, type: Toast["type"] = "info", undoAction?: () => void, undoLabel?: string) => {
     const id = ++toastIdCounter;
@@ -421,19 +429,20 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
   const handleDelete = useCallback(async (file: FileMeta) => {
     setDeleteConfirm(null);
     try {
-      await api.deleteFile(activeTab, file.rel);
+      const deleted = await api.deleteFile(activeTab, file.rel);
       active.removeLocal(file.rel);
       if (selected?.rel === file.rel) { setSelected(null); setContent(null); }
       refreshStatus();
       const undoAction = async () => {
         try {
-          await api.restoreTrash(file.name, activeTab);
+          await api.restoreTrash(deleted.trash_name || file.name, activeTab);
           active.refresh();
           addToast(`"${file.title || file.name}" restored`, "success");
-        } catch (e: any) {
-          if (e.message?.includes("ALREADY_EXISTS") || e.message?.includes("409")) {
+        } catch (e: unknown) {
+          const message = errorMessage(e);
+          if (message.includes("ALREADY_EXISTS") || message.includes("409")) {
             addToast(`"${file.name}" already exists — rename or delete the current one first`, "error");
-          } else { addToast(`Failed to restore: ${e.message}`, "error"); }
+          } else { addToast(`Failed to restore: ${message}`, "error"); }
         }
       };
       addToast(`"${file.title || file.name}" moved to trash`, "undo", undoAction, "Undo");

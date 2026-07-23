@@ -656,8 +656,8 @@ def _run_tool(name: str, args: dict) -> str:
 
 
 SYSTEM_PROMPT = (
-    f"You are a helpful assistant working in Kevin's personal knowledge base at "
-    f"{ROOT}. You are chatting with Kevin. You have read access to the whole project "
+    f"You are a helpful assistant working in a local personal knowledge base at "
+    f"{ROOT}. You are chatting with the local user. You have read access to the whole project "
     f"and write access to kb/wiki/ and kb/outputs/.\n\n"
     "Read tools: list_dir, read_file, glob_files, grep_files, wiki_search. "
     "Prefer wiki_search for compiled-knowledge questions and the filesystem "

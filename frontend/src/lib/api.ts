@@ -176,7 +176,7 @@ export const api = {
     request<FileContentResponse>(`/api/file/${category}/${encodeURIComponent(path)}`),
 
   deleteFile: (category: "raw" | "wiki" | "outputs", path: string) =>
-    request<{ success: boolean; deleted: string; trash?: string }>(
+    request<{ success: boolean; deleted: string; trash?: string; trash_name?: string }>(
       `/api/file/${category}/${encodeURIComponent(path)}`,
       { method: "DELETE" }
     ),

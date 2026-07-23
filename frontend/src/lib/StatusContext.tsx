@@ -31,20 +31,23 @@ export function StatusProvider({ children }: { children: ReactNode }) {
 
   // Initial fetch + polling
   useEffect(() => {
-    refresh();
+    const initial = window.setTimeout(() => { void refresh(); }, 0);
     const id = setInterval(refresh, POLL_MS);
-    return () => clearInterval(id);
+    return () => {
+      window.clearTimeout(initial);
+      clearInterval(id);
+    };
   }, [refresh]);
 
   // Auto-select default model (or first) when models arrive and none chosen yet
   useEffect(() => {
     if (!model && status?.llamacpp.models?.length) {
       const defaultModel = status.llamacpp.default_model;
-      setModel(
-        defaultModel && status.llamacpp.models.includes(defaultModel)
-          ? defaultModel
-          : status.llamacpp.models[0],
-      );
+      const nextModel = defaultModel && status.llamacpp.models.includes(defaultModel)
+        ? defaultModel
+        : status.llamacpp.models[0];
+      const id = window.setTimeout(() => setModel(nextModel), 0);
+      return () => window.clearTimeout(id);
     }
   }, [status, model]);
 
