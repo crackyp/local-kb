@@ -93,7 +93,7 @@ def check_port_free(port: int, label: str) -> bool:
 
 
 def check_llamacpp() -> bool:
-    """Check that llama-swap is reachable on the configured chat port."""
+    """Check that the local chat server is reachable on the configured port."""
     sys.path.insert(0, str(ROOT))
     try:
         from local_kb.config import CFG
@@ -105,12 +105,12 @@ def check_llamacpp() -> bool:
     chat_url = f"http://{cfg['host']}:{cfg['chat_port']}/health"
     try:
         with urllib.request.urlopen(chat_url, timeout=3):
-            _ok(f"llama-swap reachable at http://{cfg['host']}:{cfg['chat_port']}")
+            _ok(f"local chat server reachable at http://{cfg['host']}:{cfg['chat_port']}")
             return True
     except Exception:
         _warn(
-            f"llama-swap not reachable at http://{cfg['host']}:{cfg['chat_port']} — "
-            "start it before launching the UI."
+            f"local chat server not reachable at http://{cfg['host']}:{cfg['chat_port']} — "
+            "start `python start-llm.py` or llama-swap before launching the UI."
         )
         return False
 

@@ -4,7 +4,7 @@
 
 - Python 3.11+ with packages: `pip install -r requirements.txt`
 - Node.js 18+ (for the web UI)
-- **llama-swap** running on `127.0.0.1:8080` (default). Configure your chat-model aliases in llama-swap's `config.yaml`; the tags listed in `kb.toml [llamacpp] models` must match those aliases.
+- **A local chat server** running on `127.0.0.1:8080` (default). Use `python start-llm.py` for the bundled Qwen/Gemma setup, or configure llama-swap yourself.
 - **An embedding server** on `127.0.0.1:11434` (default — Ollama serving `nomic-embed-text` via OpenAI-compat). Any OpenAI-compatible `/v1/embeddings` endpoint works.
 
 Neither server is managed by this app — start them yourself before launching the UI.
@@ -49,7 +49,7 @@ python start-ui.py
 start-ui.bat
 ```
 
-Both scripts run preflight checks first (Python deps, node_modules, ports, llama-swap reachability). If checks fail you can still continue.
+Both scripts run preflight checks first (Python deps, node_modules, ports, local chat-server reachability). If checks fail you can still continue.
 
 To use non-default ports:
 ```bash
@@ -86,4 +86,4 @@ Run checks independently at any time:
 python preflight.py
 ```
 
-Checks: Python deps, node_modules, port availability, llama-swap reachability on `[llamacpp] chat_port`.
+Checks: Python deps, node_modules, port availability, local chat-server reachability on `[llamacpp] chat_port`.

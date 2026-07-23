@@ -13,17 +13,17 @@ if errorlevel 1 (
     echo.
     echo Preflight failed. Fix the [FAIL] items above before launching.
     echo - For port conflicts, set KB_API_PORT / KB_FRONTEND_PORT.
-    echo - For the chat backend, start llama-swap.
+    echo - For the chat backend, run python start-llm.py or start llama-swap.
     pause
     exit /b 1
 )
 echo.
-echo Starting Local KB UI (llama-swap backend)...
+echo Starting Local KB UI...
 echo   Backend:  http://127.0.0.1:%KB_API_PORT%
 echo   Frontend: http://localhost:%KB_FRONTEND_PORT%
 echo.
 echo Expecting these to already be running:
-echo   - llama-swap (chat)   on 127.0.0.1:8080
+echo   - local chat server   on 127.0.0.1:8080
 echo   - Ollama     (embeds) on 127.0.0.1:11434
 echo.
 

@@ -1,8 +1,8 @@
-# Local KB (llama-swap)
+# Local KB
 
 A local-first personal knowledge base compiler.
 
-You collect source material in `kb/raw/`, run a compile step with a local LLM (served by llama-swap fronting llama.cpp), and get linked wiki pages in `kb/wiki/`. Then you can run Q&A over the wiki and save outputs as markdown.
+You collect source material in `kb/raw/`, run a compile step with a local LLM (served by a local llama.cpp-compatible server), and get linked wiki pages in `kb/wiki/`. Then you can run Q&A over the wiki and save outputs as markdown.
 
 ## What it does
 
@@ -41,7 +41,7 @@ local-kb/
 
 - Python 3.11+ with `pip install -r requirements.txt`
 - Node.js 18+ (for the web UI)
-- **llama-swap** running on `127.0.0.1:8080` (default). llama-swap fronts `llama-server.exe` and hot-swaps the underlying model based on the request's `model` field, so a single port serves every chat tag in `kb.toml [llamacpp] models`. Aliases are configured in llama-swap's own `config.yaml`.
+- **A local chat server** running on `127.0.0.1:8080` (default). The bundled `start-llm.py` can download and run Qwen3.6-35B-A3B or Gemma4-E2B via `llama-server`. Advanced users can instead run llama-swap on the same host/port.
 - **An embedding server** on `127.0.0.1:11434` (default — Ollama). Anything OpenAI-compatible at `/v1/embeddings` works. Or set `[faiss] enabled = false` in `kb.toml` to skip embeddings entirely and use TF-IDF.
 
 This app does not manage either server's lifecycle — start them yourself before launching the UI. The preflight check probes the chat port and warns if it isn't reachable.
@@ -53,8 +53,13 @@ git clone https://github.com/crackyp/local-kb.git
 cd local-kb
 pip install -r requirements.txt
 cd frontend && npm install && cd ..
+# In a separate terminal, start/download the local LLM server:
+python start-llm.py
+# Then launch the UI:
 python start-ui.py
 ```
+
+`python start-llm.py` uses the default model from `kb.toml`. It chooses Qwen3.6-35B-A3B by default, downloads it to `.llama/` if missing, and can fall back to the smaller Gemma model with `python start-llm.py --model gemma4-e2b`.
 
 ## 3) Daily workflow
 
@@ -122,7 +127,7 @@ See: [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)
 - This is local-first. Nothing leaves your machine — all LLM and embedding calls go to `127.0.0.1`.
 - `compile` is incremental by default; use `--force` to recompile everything.
 - `ask` writes markdown files to `kb/outputs/` so your research trail stays in the vault.
-- llama-swap hot-swaps the underlying `llama-server` when the requested tag changes — expect a one-off ~3-10 s reload the first time you hit a new model.
+- The bundled `start-llm.py` runs one selected model at a time. If you use llama-swap instead, expect a one-off reload the first time you hit a new model.
 
 ## License
 
