@@ -39,7 +39,12 @@ from local_kb.utils import (
     slugify, unique_path, read_text, resolve_input_patterns,
     truncate_at_sentence,
 )
-from local_kb.llamacpp import ping as ping_llamacpp, generate as llamacpp_generate
+from local_kb.llamacpp import (
+    ping as ping_llamacpp,
+    ping_any as ping_any_llamacpp,
+    generate as llamacpp_generate,
+    resolve_provider,
+)
 from local_kb.extract import extract_pdf_text
 from local_kb.ingest import ingest_urls, format_ingest_report
 from local_kb.compile import compile_documents
@@ -541,7 +546,7 @@ async def build_index(data: IndexRequest):
     if not ping_llamacpp():
         _error_response(
             "LLAMACPP_NOT_RUNNING",
-            f"llama-swap is not reachable at "
+            f"llama-swap (primary) is not reachable at "
             f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}. "
             "Start it and try again.",
         )
@@ -577,12 +582,10 @@ async def build_index(data: IndexRequest):
 @app.post("/api/ask")
 async def ask_wiki(data: AskRequest):
     ensure_dirs()
-    if not ping_llamacpp():
+    if not ping_any_llamacpp():
         _error_response(
             "LLAMACPP_NOT_RUNNING",
-            f"llama-swap is not reachable at "
-            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}. "
-            "Start it and try again.",
+            "No llama-swap server is reachable. Check kb.toml providers.",
         )
 
     models = llamacpp_models()
@@ -800,11 +803,16 @@ async def api_load_model(data: LoadModelRequest):
     This endpoint fires a 1-token completion to trigger the swap explicitly so
     the "loaded:" status line matches what the user picked.
     """
-    if not ping_llamacpp():
+    try:
+        mgr, provider_name = resolve_provider(data.model)
+    except ValueError as e:
+        _error_response("MODEL_NOT_FOUND", str(e), 404)
+
+    if not mgr.is_alive():
         _error_response(
             "LLAMACPP_NOT_RUNNING",
-            f"llama-swap is not reachable at "
-            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}.",
+            f"{provider_name} is not reachable at "
+            f"http://{mgr.host}:{mgr.port}.",
             503,
         )
     try:
@@ -870,11 +878,22 @@ async def list_files(category: str):
         from local_kb.utils import load_json
         try:
             wiki_index = load_json(WIKI_INDEX_FILE, {})
+            wiki_extra: dict[str, dict] = {}
             for fname, entry in wiki_index.items():
-                if isinstance(entry, dict) and entry.get("title"):
-                    titles[fname] = entry["title"]
+                if isinstance(entry, dict):
+                    if entry.get("title"):
+                        titles[fname] = entry["title"]
+                    extra: dict[str, object] = {}
+                    words = entry.get("words")
+                    if words is not None:
+                        extra["words"] = words
+                    links_to = entry.get("links_to")
+                    if links_to:
+                        extra["links_to"] = links_to
+                    if extra:
+                        wiki_extra[fname] = extra
         except Exception:
-            pass
+            wiki_extra = {}
 
     def _read_title(p: Path) -> str | None:
         try:
@@ -903,6 +922,12 @@ async def list_files(category: str):
                     title = _read_title(p)
                 if title:
                     meta["title"] = title
+                if category == "wiki":
+                    extra = wiki_extra.get(p.name, {})
+                    if "words" in extra:
+                        meta["words"] = extra["words"]
+                    if "links_to" in extra:
+                        meta["links_to"] = extra["links_to"]
             result.append(meta)
         except Exception:
             continue

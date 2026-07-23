@@ -17,7 +17,7 @@ export function CompileTab() {
   const { model, refresh: refreshStatus } = useStatus();
   const { compiling, liveLines, result, startCompile, stopCompile } = useCompile();
   const [force, setForce] = useState(false);
-  const [maxChars, setMaxChars] = useState(192000);
+  const [maxChars, setMaxChars] = useState(524288);
   const [idxForce, setIdxForce] = useState(false);
   const [indexResult, setIndexResult] = useState<CommandResponse | null>(null);
   const [indexing, setIndexing] = useState(false);
@@ -63,6 +63,7 @@ export function CompileTab() {
               <option value={100000}>100K</option>
               <option value={192000}>192K (default)</option>
               <option value={250000}>250K (large context)</option>
+              <option value={524288}>512K (max context)</option>
             </select>
           </div>
           <div className="flex flex-col gap-2 pt-5">

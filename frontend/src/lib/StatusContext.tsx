@@ -36,10 +36,15 @@ export function StatusProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(id);
   }, [refresh]);
 
-  // Auto-select first model when models arrive and none chosen yet
+  // Auto-select default model (or first) when models arrive and none chosen yet
   useEffect(() => {
     if (!model && status?.llamacpp.models?.length) {
-      setModel(status.llamacpp.models[0]);
+      const defaultModel = status.llamacpp.default_model;
+      setModel(
+        defaultModel && status.llamacpp.models.includes(defaultModel)
+          ? defaultModel
+          : status.llamacpp.models[0],
+      );
     }
   }, [status, model]);
 

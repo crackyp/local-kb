@@ -20,7 +20,7 @@ from typing import Callable, Iterator, Optional
 from .config import CFG
 from .paths import ROOT, WIKI, OUTPUTS
 from .safe_ops import soft_delete
-from .llamacpp import _post_json, get_chat_manager  # type: ignore[attr-defined]
+from .llamacpp import _post_json, resolve_provider  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
@@ -709,8 +709,10 @@ def chat_stream(
     if not history or history[0].get("role") != "system":
         history = [{"role": "system", "content": SYSTEM_PROMPT}, *history]
 
-    base_url = get_chat_manager().ensure_running(model)
-    timeout = int(CFG["llamacpp"]["timeout"])
+    mgr, provider_name = resolve_provider(model)
+    base_url = mgr.ensure_running(model)
+    provider_cfg = CFG.get(provider_name, CFG["llamacpp"])
+    timeout = int(provider_cfg.get("timeout", 1200))
 
     for _ in range(max_iters):
         payload = {

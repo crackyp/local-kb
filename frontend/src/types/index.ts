@@ -1,4 +1,4 @@
-export type View = "ingest" | "compile" | "ask" | "chat" | "explorer" | "quality";
+export type View = "ingest" | "compile" | "chat" | "explorer" | "quality";
 
 export interface FileMeta {
   name: string;
@@ -8,12 +8,17 @@ export interface FileMeta {
   modified_h: string;
   rel: string;
   title?: string;
+  /** Wiki-only: word count from wiki_index.json */
+  words?: number;
+  /** Wiki-only: outbound link targets from wiki_index.json */
+  links_to?: string[];
 }
 
 export interface LlamaCppStatus {
   running: boolean;
   models: string[];
   loaded: string | null;
+  default_model?: string;
 }
 
 export interface StatusResponse {

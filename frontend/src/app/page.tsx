@@ -7,7 +7,6 @@ import { CompileProvider } from "@/lib/CompileContext";
 import { Sidebar } from "@/components/Sidebar";
 import { IngestTab } from "@/components/IngestTab";
 import { CompileTab } from "@/components/CompileTab";
-import { AskTab } from "@/components/AskTab";
 import { ChatTab } from "@/components/ChatTab";
 import { ExplorerTab } from "@/components/ExplorerTab";
 import { QualityTab } from "@/components/QualityTab";
@@ -24,9 +23,8 @@ export default function HomePage() {
             <div className="max-w-5xl mx-auto text-slate-900">
               {activeView === "ingest" && <IngestTab />}
               {activeView === "compile" && <CompileTab />}
-              {activeView === "ask" && <AskTab />}
               {activeView === "chat" && <ChatTab />}
-              {activeView === "explorer" && <ExplorerTab />}
+              {activeView === "explorer" && <ExplorerTab onNavigate={setActiveView} />}
               {activeView === "quality" && <QualityTab />}
             </div>
           </main>

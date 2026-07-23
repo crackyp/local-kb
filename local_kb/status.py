@@ -10,6 +10,7 @@ from typing import List
 from .paths import RAW, RAW_ASSETS, WIKI, OUTPUTS, CORRECTIONS, ensure_dirs
 from .index_state import status_label as faiss_status_label
 from . import llamacpp
+from .config import CFG
 
 
 # ---------------------------------------------------------------------------
@@ -17,7 +18,35 @@ from . import llamacpp
 # ---------------------------------------------------------------------------
 
 def llamacpp_is_running() -> bool:
-    return llamacpp.is_ready()
+    return llamacpp.ping_any()
+
+
+def llamacpp_providers() -> list[dict]:
+    """Return a list of provider statuses."""
+    providers = []
+    for key, value in CFG.items():
+        if not isinstance(value, dict):
+            continue
+        if key == "llamacpp" or (key.startswith("llamacpp_") and value.get("models")):
+            display_name = key.replace("llamacpp", "llama-swap").replace("_", "-")
+            host = value.get("host", "127.0.0.1")
+            port = int(value.get("chat_port", 8080))
+            try:
+                mgr = llamacpp.get_chat_manager(key)
+                alive = mgr.is_alive()
+                loaded = llamacpp.loaded_model(key) if alive else None
+            except Exception:
+                alive = False
+                loaded = None
+            providers.append({
+                "name": key,
+                "display_name": display_name,
+                "host": f"http://{host}:{port}",
+                "running": alive,
+                "loaded": loaded,
+                "models": [str(m) for m in value.get("models", [])],
+            })
+    return providers
 
 
 def llamacpp_models() -> List[str]:
@@ -45,11 +74,13 @@ def _count_files(directory: Path, pattern: str = "**/*", exclude: list[Path] | N
 # ---------------------------------------------------------------------------
 
 def get_status() -> dict:
-    """Return full system status dict (llama.cpp, file counts, FAISS)."""
+    """Return full system status dict (llama.cpp providers, file counts, FAISS)."""
     ensure_dirs()
-    alive = llamacpp_is_running()
+    providers = llamacpp_providers()
     models = llamacpp_models()
-    loaded = llamacpp.loaded_model() if alive else None
+    # Primary loaded model (backward compat)
+    primary = next((p for p in providers if p["name"] == "llamacpp"), None)
+    loaded = primary["loaded"] if primary else None
 
     try:
         faiss = faiss_status_label()
@@ -57,7 +88,8 @@ def get_status() -> dict:
         faiss = "unavailable"
 
     return {
-        "llamacpp": {"running": alive, "models": models, "loaded": loaded},
+        "llamacpp": {"running": llamacpp_is_running(), "models": models, "loaded": loaded, "default_model": CFG["model"]["default"]},
+        "providers": providers,
         "files": {
             "raw": _count_files(RAW, exclude=[RAW_ASSETS]),
             "wiki": _count_files(WIKI, "*.md"),

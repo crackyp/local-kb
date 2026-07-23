@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explorer Tab Redesign Plan — GSA-kb</title>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --ink: #1e293b;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --accent: #2563eb;
+    --accent-soft: #eff6ff;
+    --warn: #b45309;
+    --warn-soft: #fffbeb;
+    --ok: #047857;
+    --code-bg: #f1f5f9;
+    --code-ink: #0f172a;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.65;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    padding: 0;
+  }
+  .wrap {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 56px 28px 96px;
+  }
+  header.hero {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    color: #fff;
+    border-radius: 16px;
+    padding: 40px 40px 32px;
+    margin-bottom: 32px;
+    box-shadow: 0 10px 30px -15px rgba(15, 23, 42, 0.5);
+  }
+  header.hero .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #93c5fd;
+    margin-bottom: 8px;
+  }
+  header.hero h1 {
+    margin: 0 0 8px;
+    font-size: 2.1rem;
+    line-height: 1.2;
+    font-weight: 700;
+  }
+  header.hero p {
+    margin: 0;
+    color: #cbd5e1;
+    font-size: 1rem;
+    max-width: 60ch;
+  }
+  .meta-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 18px;
+  }
+  .chip {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.18);
+    color: #e2e8f0;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+  }
+  nav.toc {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 22px;
+    margin-bottom: 28px;
+  }
+  nav.toc details > summary {
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+  }
+  nav.toc details > summary::-webkit-details-marker { display: none; }
+  nav.toc ol {
+    margin: 10px 0 0;
+    padding-left: 18px;
+    columns: 2;
+    column-gap: 28px;
+  }
+  nav.toc li { margin: 4px 0; font-size: 0.9rem; }
+  nav.toc a { color: var(--accent); text-decoration: none; }
+  nav.toc a:hover { text-decoration: underline; }
+
+  section {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+  }
+  section > h2 {
+    margin: 0 0 4px;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  section > h2 .num {
+    background: var(--accent);
+    color: #fff;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+  section .lead {
+    color: var(--muted);
+    margin: 4px 0 20px;
+    font-size: 0.95rem;
+  }
+  h3 {
+    margin: 24px 0 8px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #0f172a;
+  }
+  p, ul, ol { margin: 0.6em 0; }
+  ul, ol { padding-left: 22px; }
+  li { margin: 4px 0; }
+  code {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.86em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-size: 0.82rem;
+  }
+  pre code { background: none; padding: 0; }
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 720px) {
+    .grid-2 { grid-template-columns: 1fr; }
+    nav.toc ol { columns: 1; }
+    section { padding: 22px 18px; }
+    header.hero { padding: 28px 22px; }
+  }
+  .callout {
+    border-left: 4px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin: 12px 0;
+    font-size: 0.92rem;
+  }
+  .callout.warn {
+    border-left-color: var(--warn);
+    background: var(--warn-soft);
+  }
+  .callout strong { color: #0f172a; }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.9rem;
+    margin: 12px 0;
+  }
+  th, td {
+    border: 1px solid var(--line);
+    padding: 8px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: #f1f5f9;
+    font-weight: 600;
+    color: #334155;
+  }
+  tr:nth-child(even) td { background: #fbfcfe; }
+
+  /* Wireframe blocks */
+  .wireframe {
+    border: 1px dashed #94a3b8;
+    background: #fcfdff;
+    border-radius: 10px;
+    padding: 14px;
+    margin: 14px 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.78rem;
+    color: #334155;
+    overflow-x: auto;
+  }
+  .wf-row { display: flex; gap: 8px; align-items: stretch; }
+  .wf-col {
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    border-radius: 6px;
+    padding: 8px;
+    min-height: 120px;
+  }
+  .wf-col.master { flex: 0 0 38%; }
+  .wf-col.detail { flex: 1; min-height: 240px; }
+  .wf-bar {
+    background: #e2e8f0;
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-size: 0.7rem;
+    margin-bottom: 6px;
+    color: #475569;
+  }
+  .wf-tab {
+    display: inline-block;
+    background: #2563eb;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 4px 4px 0 0;
+    font-size: 0.7rem;
+    margin-right: 2px;
+  }
+  .wf-tab.off { background: #e2e8f0; color: #475569; }
+  .wf-item {
+    border-bottom: 1px solid #eef2f7;
+    padding: 5px 4px;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .wf-item.active { background: #eff6ff; border-left: 3px solid #2563eb; padding-left: 5px; }
+  .wf-item .name { color: #0f172a; }
+  .wf-item .meta { color: #94a3b8; font-size: 0.66rem; }
+  .wf-folder { font-weight: 600; color: #0f172a; background: #f8fafc; padding: 4px; border-radius: 4px; margin-top: 6px; }
+  .legend {
+    display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.74rem; color: var(--muted);
+    margin-top: 8px;
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  .pill {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: #e2e8f0;
+    color: #334155;
+  }
+  .pill.must { background: #dcfce7; color: #166534; }
+  .pill.should { background: #ede9fe; color: #5b21b6; }
+  .pill.nice { background: #fef9c3; color: #854d0e; }
+  .pill.backend { background: #ffe4e6; color: #9f1239; }
+
+  .checks li { list-style: none; margin-left: -18px; padding-left: 22px; position: relative; }
+  .checks li::before {
+    content: "✓";
+    position: absolute; left: 0; top: 0;
+    color: var(--ok); font-weight: 700;
+  }
+  .checks li.x::before { content: "✗"; color: #dc2626; }
+  .checks li.q::before { content: "?"; color: var(--warn); }
+
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.82rem;
+    padding-top: 24px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <div class="eyebrow">Design Plan · Frontend</div>
+  <h1>Explorer Tab Redesign</h1>
+  <p>A user-friendly redesign of the file browser for <code>raw/</code>, <code>wiki/</code>, and <code>outputs/</code> — grounded in the current codebase, the data the backend already exposes, and standard file-manager UX patterns.</p>
+  <div class="meta-row">
+    <span class="chip">Component: <code>ExplorerTab.tsx</code></span>
+    <span class="chip">Scope: Frontend-only (1 optional backend tweak)</span>
+    <span class="chip">Status: Proposed</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <details open>
+    <summary>Table of contents</summary>
+    <ol>
+      <li><a href="#summary">Executive summary</a></li>
+      <li><a href="#today">What's wrong today</a></li>
+      <li><a href="#principles">Goals &amp; principles</a></li>
+      <li><a href="#layout">Proposed layout</a></li>
+      <li><a href="#list">The file list</a></li>
+      <li><a href="#detail">The detail / preview pane</a></li>
+      <li><a href="#trash">Trash &amp; undelete</a></li>
+      <li><a href="#search">Search &amp; filter</a></li>
+      <li><a href="#wiki">Wiki-specific richness</a></li>
+      <li><a href="#interactions">Interaction &amp; ergonomics</a></li>
+      <li><a href="#a11y">Accessibility</a></li>
+      <li><a href="#data">Data &amp; backend notes</a></li>
+      <li><a href="#phases">Implementation phases</a></li>
+      <li><a href="#scope">Non-goals &amp; open questions</a></li>
+    </ol>
+  </details>
+</nav>
+
+<!-- ================================================================ -->
+<section id="summary">
+  <h2><span class="num">1</span>Executive summary</h2>
+  <p class="lead">The Explorer's job is simple: let a user find, read, and occasionally delete files across the three knowledge-base buckets. Today it does that, but clumsily. This plan keeps the existing three-tab mental model and the existing backend APIs, and rebuilds the surface around a <strong>master–detail split</strong>, <strong>real metadata</strong>, <strong>soft-delete with undo</strong>, and <strong>keyboard-first navigation</strong>.</p>
+
+  <p>The single biggest win is replacing the stacked "list-then-preview-below" layout — where selecting a file collapses the list to a ~3-row sliver — with a persistent two-column split. The second is surfacing data the backend <em>already returns</em> but the UI throws away: file paths for nested raw files, wiki word counts and outbound links, and the entire trash system.</p>
+
+  <div class="callout">
+    <strong>Scope discipline.</strong> This plan is deliberately conservative. It reuses <code>api.listFiles</code>, <code>api.getFile</code>, <code>api.deleteFile</code>, <code>api.listTrash</code>, <code>api.restoreTrash</code>, <code>api.emptyTrash</code>, and <code>api.promote</code> exactly as defined today. Only one small, optional backend change is proposed (exposing wiki-index metadata in the files payload) — and even that has a frontend-only fallback.
+  </div>
+
+  <p>Priority labels used below:</p>
+  <p>
+    <span class="pill must">Must</span> = ships in phase 1 &nbsp;
+    <span class="pill should">Should</span> = phase 2 &nbsp;
+    <span class="pill nice">Nice</span> = phase 3 / deferred &nbsp;
+    <span class="pill backend">Backend</span> = requires a backend change
+  </p>
+</section>
+
+<!-- ================================================================ -->
+<section id="today">
+  <h2><span class="num">2</span>What's wrong today</h2>
+  <p class="lead">Concrete problems found by reading <code>ExplorerTab.tsx</code> against the data the backend actually returns.</p>
+
+  <h3>Layout &amp; space</h3>
+  <ul>
+    <li>The file list is capped at <code>max-h-48</code> (~3 visible rows) and the preview panel renders <em>below</em> it. Selecting a file means you can no longer see the list while reading — you lose your place.</li>
+    <li>The three category tabs are flat lowercase text with bare counts. There's no visual distinction of the active tab beyond a blue underline, and the count is the only signal of what's inside.</li>
+    <li>No breadcrumb or heading. Once you're in <code>raw/</code> with nested folders, the panel gives no indication of where you are.</li>
+  </ul>
+
+  <h3>Information that's available but hidden</h3>
+  <ul class="checks">
+    <li><code>rel</code> already includes the subdirectory path for nested raw files, but the table only renders <code>file.name</code> — so <code>emails/2024/foo.txt</code> and <code>handbooks-and-guides/foo.txt</code> look identical.</li>
+    <li><code>kb/index/wiki_index.json</code> carries <code>title</code>, <code>links_to[]</code>, and <code>words</code> for every wiki page. The UI uses none of it beyond the title.</li>
+    <li>The backend exposes a full trash API (<code>listTrash</code>, <code>restoreTrash</code>, <code>emptyTrash</code>) and <code>api.ts</code> already wraps it — but there is <strong>zero UI</strong> for it. Deletes look permanent.</li>
+    <li>The <code>promote</code> action (outputs → raw) exists and is wired in <code>AskTab</code>, but is unreachable from Explorer when viewing an output.</li>
+  </ul>
+
+  <h3>Interaction &amp; safety</h3>
+  <ul>
+    <li>Delete is a raw <code>confirm()</code> dialog triggered by tiny red "Delete" text inside a clickable row. One stray click on the row and you're in the dialog; one stray click on the text and a file is gone. No undo, no trash visibility.</li>
+    <li>No keyboard navigation: no arrow keys to move between rows, no Enter to open, no Escape to close the preview, no <code>/</code> to focus search.</li>
+    <li>Filter matches only <code>name</code> and <code>title</code> — not file contents. For a knowledge base, "find the page that mentions X" is the most common search, and it isn't supported.</li>
+    <li>Sort is a separate dropdown with fixed options. The table headers are not sortable, even though Size and Modified are right there.</li>
+    <li>Preview silently truncates at 100,000 characters with a plain <code>(truncated)</code> suffix — no indicator of how much was cut, no "show full" affordance.</li>
+  </ul>
+
+  <h3>Polish gaps</h3>
+  <ul>
+    <li>No file-type affordance — no icon, no colored badge, no extension chip. A <code>.pdf</code>, a <code>.md</code>, and a <code>.txt</code> look the same.</li>
+    <li>Empty states are passive text. "No source files yet" doesn't offer a button to the Ingest tab, even though the app knows exactly where to send you.</li>
+    <li>"Download HTML" only appears for wiki/<code>.md</code>. Raw markdown and outputs can't be downloaded at all from Explorer.</li>
+    <li>No URL state — you can't link to or bookmark a specific file.</li>
+    <li>Internal wiki links render with a strike-through if the target isn't in <em>the current category's</em> file list (the lookup is <code>active.files.find(...)</code>), so a wiki link to a page that exists in <code>wiki/</code> shows as broken when you're browsing <code>raw/</code>.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="principles">
+  <h2><span class="num">3</span>Goals &amp; principles</h2>
+  <p class="lead">The redesign is judged against these. If a proposed feature doesn't serve one of these, it gets cut.</p>
+
+  <ol>
+    <li><strong>Find first.</strong> The Explorer is primarily a search-and-read tool. Finding the right file should be sub-second; reading it should be comfortable.</li>
+    <li><strong>Master–detail, persistent.</strong> The list and the reader stay visible together. Selecting a file never hides the list.</li>
+    <li><strong>Don't surprise, don't destroy.</strong> Deletes are soft, reversible, and confirmed with a clear undo affordance — never a bare <code>confirm()</code>.</li>
+    <li><strong>Show what the system knows.</strong> If the backend returns metadata (paths, word counts, link targets, trash state), the UI should use it rather than discard it.</li>
+    <li><strong>Keyboard-first, mouse-complete.</strong> Every frequent action has a key. The mouse path is never the only path.</li>
+    <li><strong>Match the app, not the web.</strong> This is a desktop-style tool inside a Next.js app. Use app conventions (Sidebar, <code>SectionCard</code>, <code>ActionButton</code>, slate/blue palette) — don't import a generic file-manager chrome.</li>
+    <li><strong>Surgical.</strong> Reuse existing APIs and shared components. No new dependencies. No backend rewrites unless a phase explicitly calls for one.</li>
+  </ol>
+</section>
+
+<!-- ================================================================ -->
+<section id="layout">
+  <h2><span class="num">4</span>Proposed layout</h2>
+  <p class="lead">A persistent two-column master–detail, with a slim command bar on top. The three categories become a segmented control in the bar, not full-width tabs.</p>
+
+  <div class="wireframe">
+┌──────────────────────────────────────────────────────────────────────────┐
+│  [ Wiki 42 ][ Raw 117 ][ Outputs 9 ][ Trash 3 ]   🔎 Filter…   ⟳ Refresh │
+├──────────────────────────────────────────────────────────────────────────┤
+│ ╭────────────────────────╮ ╭───────────────────────────────────────────╮ │
+│ │ Master (file list)     │ │ Detail / Reader                            │ │
+│ │                        │ │                                            │ │
+│ │ ▸ 📁 emails            │ │  Data Quality Assessment Framework         │ │
+│ │   📄 note-2024-03.txt  │ │  wiki/data-quality-….md · 1,640 words      │ │
+│ │ ● handbooks-and-guides │ │  [Download] [Copy] [Promote] [Delete]       │ │
+│ │   📄 onboarding.md     │ │ ────────────────────────────────────────── │ │
+│ │ …                      │ │  <rendered markdown / code preview>        │ │
+│ │                        │ │                                            │ │
+│ │ 42 files · sorted A→Z  │ │                                            │ │
+│ ╰────────────────────────╯ ╰───────────────────────────────────────────╯ │
+└──────────────────────────────────────────────────────────────────────────┘
+  </div>
+
+  <h3>Layout rules</h3>
+  <ul>
+    <li><strong>Command bar</strong> (sticky, top): segmented category control with live counts, a <em>filter</em> input (with <code>/</code> shortcut), a sort control, and Refresh. The Trash count is a chip-button that opens the Trash drawer (see §8).</li>
+    <li><strong>Master column</strong> (left, ~38% width, min 280px, max 420px): scrollable file list. Respects category, filter, sort, and folder grouping.</li>
+    <li><strong>Detail column</strong> (right, fills remainder): the reader/preview. Persistent — clicking a file updates only this pane.</li>
+    <li><strong>Responsive</strong>: below 720px width, the columns collapse to a single column with a "← Back to list" affordance in the detail header (the selection is preserved in state).</li>
+    <li><strong>Nothing stacks vertically</strong> except on mobile. The list never shrinks below ~6 visible rows.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="list">
+  <h2><span class="num">5</span>The file list (master)</h2>
+  <p class="lead">Replace the four-column table with a richer, grouped, virtualization-tolerant list. Keep it cheap — no new data fetching.</p>
+
+  <h3>Row design <span class="pill must">Must</span></h3>
+  <p>Each row is a button (semantic, keyboard-focusable) showing three lines of info from data the backend already returns:</p>
+  <div class="wireframe">
+  <div class="wf-row"><div class="wf-col master" style="min-height:auto">
+    <div class="wf-item active">
+      <div>
+        <div class="name">📄 Data Quality Assessment Framework</div>
+        <div class="meta">data-quality-…md · 1.6 KB · 2026-05-12</div>
+      </div>
+      <div class="meta">1,640w</div>
+    </div>
+    <div class="wf-item">
+      <div>
+        <div class="name">📄 qa-20260410-003833</div>
+        <div class="meta">outputs/qa-…md · 3.2 KB · 2026-04-10</div>
+      </div>
+    </div>
+  </div></div>
+  </div>
+  <ul>
+    <li><strong>Primary line:</strong> <code>title || name</code> (already done today; keep it).</li>
+    <li><strong>Secondary line:</strong> the <code>rel</code> path (not just <code>name</code>), plus <code>size_h</code> and <code>modified_h</code>. This fixes the "nested raw files all look alike" bug.</li>
+    <li><strong>Trailing chip</strong> (wiki only): word count from <code>wiki_index.json</code>. See §9.</li>
+    <li><strong>Type glyph</strong>: a small monochrome glyph or colored extension badge (md / txt / pdf / json / …) derived from the filename. No icon-font dependency — a static map to an emoji or a 3-letter badge is enough.</li>
+  </ul>
+
+  <h3>Folder grouping for <code>raw/</code> <span class="pill should">Should</span></h3>
+  <p>Raw files live in subdirectories (<code>emails/</code>, <code>handbooks-and-guides/</code>, <code>slide-decks/</code>, …). Today they're flattened. Proposed: a collapsible group per top-level subdirectory, with a count badge; files at the root sit in an implicit "Ungrouped" group at the top.</p>
+  <div class="wireframe">
+    <div class="wf-folder">▸ 📁 emails (14)</div>
+    <div class="wf-item" style="margin-left:14px"><div><div class="name">📄 note-2024-03.txt</div><div class="meta">emails/2024/…</div></div></div>
+    <div class="wf-folder">▸ 📁 handbooks-and-guides (38)</div>
+    <div class="wf-folder">▾ 📁 Ungrouped (3)</div>
+    <div class="wf-item" style="margin-left:14px"><div><div class="name">📄 Windows-11-25H2-….txt</div><div class="meta">2.1 KB</div></div></div>
+  </div>
+  <p>Group state (open/collapsed per folder) is local component state. The filter collapses all groups and shows flat matches; clearing the filter restores prior group state.</p>
+
+  <h3>Sorting <span class="pill must">Must</span></h3>
+  <ul>
+    <li>Keep the existing sort keys (newest, oldest, name A→Z, name Z→A, largest) in a control — but move it to a compact <code>Sort: Newest ▾</code> dropdown in the command bar.</li>
+    <li>Default sort: <strong>Modified, newest first</strong> for <code>outputs</code> and <code>raw</code>; <strong>Name A→Z</strong> for <code>wiki</code> (an alphabetical wiki is more browsable than a chronological one).</li>
+    <li>Folder groups always sort internally by the chosen sort; the groups themselves sort by newest member (or alphabetically when the inner sort is name-based).</li>
+  </ul>
+
+  <h3>Selection &amp; focus</h3>
+  <ul>
+    <li>Single selection (today's model). Clicking a row selects it and loads the detail pane.</li>
+    <li>The selected row gets a left accent border + soft fill, exactly like today's <code>bg-blue-100</code>.</li>
+    <li>Keyboard: <kbd>↑</kbd>/<kbd>↓</kbd> move focus between rows, <kbd>Enter</kbd> opens, <kbd>Esc</kbd> returns focus to the filter. Detail pane updates on focus-move when <kbd>Enter</kbd> is pressed; arrow-move only previews on hover- equivalent (configurable: "preview on hover" off by default to avoid content flashing).</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="detail">
+  <h2><span class="num">6</span>The detail / preview pane</h2>
+  <p class="lead">A reader-first panel that stays put while the list scrolls beside it. Header carries identity + actions; body carries rendered content.</p>
+
+  <h3>Header <span class="pill must">Must</span></h3>
+  <ul>
+    <li><strong>Title</strong> (large, truncate with tooltip): <code>title || name</code>.</li>
+    <li><strong>Subtitle line</strong>: full <code>rel</code> path, word count (wiki), size, and modified date — the metadata that today is crammed into a tiny <code>size_h | modified_h</code> string.</li>
+    <li><strong>Action toolbar</strong> (right-aligned, wrapping on narrow widths): Download, Copy path, Copy content, and — conditionally — Promote (outputs) or Delete. Buttons use the existing slate/blue styles; Delete is the only red one and lives last.</li>
+  </ul>
+
+  <h3>Body <span class="pill must">Must</span></h3>
+  <ul>
+    <li>Markdown files (wiki, outputs, and <code>.md</code> in raw) render via the existing <code>ReactMarkdown + remarkGfm</code> pipeline. Keep the internal-link resolver from today, but <strong>fix the scope bug</strong>: resolve against the <code>wiki</code> file list always, regardless of which category is active, since wiki links point to wiki pages. Broken links get a tooltip and a muted style, but not a strike-through (strike reads as "deleted").</li>
+    <li>Other previewable text files render in a monospace <code>&lt;pre&gt;</code> with line-wrapping toggle (today's behavior, plus a wrap on/off control).</li>
+    <li>Binary / non-previewable files show a friendly empty state with the file type, size, and a "Download" button — not the current bare "Binary file — preview not available".</li>
+  </ul>
+
+  <h3>Truncation, done honestly <span class="pill must">Must</span></h3>
+  <p>Replace the silent 100k slice with a visible truncation banner: <em>"Showing first 100,000 of N characters — Download to view in full."</em> Compute N from the fetched content length (note: today the API returns full content, so N is just <code>content.length</code>; the cap is a render-side guard, not a server limit).</p>
+
+  <h3>Empty &amp; loading states <span class="pill must">Must</span></h3>
+  <ul>
+    <li><strong>Nothing selected:</strong> a centered placeholder with an icon and "Select a file to preview" — plus, for empty categories, the actionable empty state below.</li>
+    <li><strong>Loading:</strong> a skeleton in the detail body (today's "Loading preview…" text is fine but should sit inside the body, not replace the header).</li>
+    <li><strong>Empty category:</strong> today's hint text, but rendered as a call-to-action card with a button that switches the sidebar view — <code>raw</code> → "Open Ingest", <code>wiki</code> → "Open Compile", <code>outputs</code> → "Open Ask". This requires the tab's <code>onNavigate</code>, threaded in via a prop (see §10).</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="trash">
+  <h2><span class="num">7</span>Trash &amp; undelete <span class="pill must">Must</span></h2>
+  <p class="lead">The backend and <code>api.ts</code> already support soft-delete, list, restore, and empty. The Explorer is the natural home for it. This closes the biggest safety gap.</p>
+
+  <h3>Delete UX</h3>
+  <ul>
+    <li>Replace the inline <code>confirm()</code> with an <strong>inline confirm popover</strong> anchored to the Delete button: "Move <em>name</em> to trash? [Undo available for 5s]". Two buttons: <strong>Delete</strong> (red) and <strong>Cancel</strong>. No native dialog.</li>
+    <li>After delete, show a <strong>toast</strong> (bottom-right, app-style) with <strong>Undo</strong> for 5 seconds. Undo calls <code>api.restoreTrash(name, category)</code> immediately — no need to open the Trash drawer. This is the single most important safety improvement.</li>
+    <li>Row delete button only appears on hover/focus of the row (not always visible), reducing mis-clicks. It stays always-visible on touch devices.</li>
+  </ul>
+
+  <h3>Trash drawer</h3>
+  <p>The command-bar "Trash (N)" chip opens a right-side drawer (or a modal on mobile) listing <code>TrashItem[]</code> from <code>api.listTrash()</code>. Each row shows:</p>
+  <ul>
+    <li>Original name + category badge + trashed-at timestamp.</li>
+    <li><strong>Restore</strong> (per-item) → <code>api.restoreTrash(name, category)</code>.</li>
+    <li><strong>Empty all</strong> (per-category or all) → <code>api.emptyTrash(category?)</code>, behind a second inline-confirm.</li>
+    <li>The drawer refreshes its own list on open; restore/empty update it locally.</li>
+  </ul>
+  <div class="callout warn">
+    <strong>Conflict handling.</strong> <code>restore_from_trash</code> raises <code>FileExistsError</code> (HTTP 409) if a file with the original name now exists. The UI must surface that as a clear "A file with this name already exists — rename or delete the current one first" message, not a generic error. The backend already returns <code>ALREADY_EXISTS</code>; just map it.
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<section id="search">
+  <h2><span class="num">8</span>Search &amp; filter</h2>
+  <p class="lead">Today: name+title substring match. That's a reasonable baseline; the plan extends it without a backend rewrite.</p>
+
+  <h3>Filter (instant, client-side) <span class="pill must">Must</span></h3>
+  <ul>
+    <li>Keep the existing name+title substring match as the default — it's fast and needs no new data.</li>
+    <li>Add a <strong>path-aware</strong> match: also match against <code>rel</code> (so <code>emails</code> finds all files under <code>emails/</code>).</li>
+    <li>Show a live <strong>result count</strong> in the filter bar: <em>"3 of 42 match"</em>. Clearing the filter restores full list.</li>
+    <li><kbd>Esc</kbd> in the filter clears it; <kbd>/</kbd> anywhere focuses it.</li>
+  </ul>
+
+  <h3>Content search <span class="pill nice">Nice</span> <span class="pill backend">Backend</span></h3>
+  <p>A true full-text search across file bodies would need a new endpoint (<code>/api/search?q=…</code>) that greps the three directories and returns matches with snippets. This is valuable for a knowledge base but is a separate feature with its own scope (snippet highlighting, regex, scope-by-category). It is <strong>out of scope</strong> for this redesign and listed only to bound expectations. The FAISS-backed Ask flow is the app's real semantic search; Explorer's filter should stay lexical and instant.</p>
+
+  <h3>Filter chips / facets <span class="pill nice">Nice</span></h3>
+  <p>Optional, phase 3: quick-filter chips by extension or by folder, generated from the current list. Cheap to build from in-memory data; useful when <code>raw/</code> grows large. Skip for now if the lists stay under a few hundred items.</p>
+</section>
+
+<!-- ================================================================ -->
+<section id="wiki">
+  <h2><span class="num">9</span>Wiki-specific richness</h2>
+  <p class="lead">The wiki category has metadata the others don't. Use it to make the wiki browsable like a wiki, not just a file list.</p>
+
+  <h3>Word count + outbound links <span class="pill should">Should</span></h3>
+  <p><code>kb/index/wiki_index.json</code> maps each page to <code>{title, links_to[], words}</code>. Two ways to surface it, in order of preference:</p>
+  <ol>
+    <li><span class="pill backend">Backend</span> <strong>Preferred:</strong> extend <code>/api/files/wiki</code> to merge <code>words</code> and <code>links_to</code> into each <code>FileMeta</code> (the handler already loads <code>wiki_index.json</code> for titles — adding two more fields is a 3-line change). Frontend reads them from <code>file</code> directly.</li>
+    <li><span class="pill">Frontend-only fallback:</span> fetch <code>/api/files/wiki</code> as today, and separately fetch the index JSON. The index isn't currently served at an HTTP endpoint, so this actually still needs a tiny backend route — making option 1 strictly better. <strong>Go with option 1.</strong></li>
+  </ol>
+  <p>Where it shows up:</p>
+  <ul>
+    <li>List row trailing chip: <code>1,640w</code> (word count).</li>
+    <li>Detail header subtitle: <code>· 1,640 words · links to 3 pages</code>.</li>
+    <li>Detail sidebar (collapsible, right edge): "Outbound links" list — clicking one navigates to that wiki page within Explorer (re-resolve via the wiki list). Broken links show muted with a tooltip.</li>
+  </ul>
+
+  <h3>Internal link resolution — bug fix <span class="pill must">Must</span></h3>
+  <p>Today's resolver does <code>active.files.find((f) =&gt; f.name === targetName)</code>, where <code>active</code> is the currently-selected category. A wiki link clicked while browsing <code>outputs</code> or <code>raw</code> will always look up against the wrong list and render as broken. Fix: resolve against the <code>wiki</code> file list specifically (a cheap second <code>useFileList("wiki")</code> call, or a shared lookup). If the target exists, clicking switches to the wiki tab and selects the page; if not, render muted with a tooltip — <strong>no strike-through</strong>.</p>
+
+  <h3>INDEX.md affordance <span class="pill nice">Nice</span></h3>
+  <p><code>wiki/INDEX.md</code> is auto-generated. Consider pinning it to the top of the wiki list with a small "index" badge so it's discoverable as the entry point. Low value, low cost.</p>
+</section>
+
+<!-- ================================================================ -->
+<section id="interactions">
+  <h2><span class="num">10</span>Interaction &amp; ergonomics</h2>
+  <p class="lead">The small things that make a file browser feel good. All are frontend-only.</p>
+
+  <h3>Keyboard <span class="pill must">Must</span></h3>
+  <table>
+    <tr><th>Key</th><th>Action</th><th>Where</th></tr>
+    <tr><td><kbd>/</kbd></td><td>Focus filter</td><td>Anywhere in Explorer</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Clear filter / close drawer / close inline-confirm</td><td>Filter / drawer / popover</td></tr>
+    <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Move row focus; load detail on <kbd>Enter</kbd></td><td>Master list</td></tr>
+    <tr><td><kbd>Enter</kbd></td><td>Open focused file in detail pane</td><td>Master list</td></tr>
+    <tr><td><kbd>Delete</kbd></td><td>Open the inline-delete confirm for the focused file</td><td>Master list (when not typing in filter)</td></tr>
+    <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Switch to Wiki / Raw / Outputs</td><td>Anywhere in Explorer</td></tr>
+  </table>
+
+  <h3>Actions in the detail toolbar <span class="pill must">Must</span></h3>
+  <table>
+    <tr><th>Action</th><th>When shown</th><th>API</th></tr>
+    <tr><td>Download (original file)</td><td>Always (any category)</td><td>New: blob download from <code>api.getFile</code> content (text) or a raw fetch (binary) — both client-side</td></tr>
+    <tr><td>Download HTML</td><td>wiki + <code>.md</code> outputs (today's <code>downloadWikiHtml</code>)</td><td>existing</td></tr>
+    <tr><td>Copy content</td><td>Previewable text files</td><td>client-side <code>navigator.clipboard</code></td></tr>
+    <tr><td>Copy path</td><td>Always</td><td>client-side; copies <code>rel</code></td></tr>
+    <tr><td>Promote to raw</td><td>Outputs category only</td><td><code>api.promote(filename)</code></td></tr>
+    <tr><td>Delete</td><td>Always (hover/focus); red</td><td><code>api.deleteFile</code> + Undo via <code>api.restoreTrash</code></td></tr>
+  </table>
+
+  <h3>Toasts <span class="pill should">Should</span></h3>
+  <p>Introduce a tiny toast system (one component, no dependency) for: successful delete + Undo, successful promote ("Saved to <code>raw/</code>"), copy actions ("Copied"), and errors. Park it at the app root so other tabs can use it later. Keep it to one toast at a time, auto-dismiss after 5s (Undo toasts stay until clicked or 6s).</p>
+
+  <h3>URL state <span class="pill nice">Nice</span></h3>
+  <p>Reflect <code>?tab=wiki&amp;file=data-quality-….md</code> in the URL so a file is linkable/bookmarkable and the browser back button works sensibly. Uses <code>history.replaceState</code> to avoid polluting history on every selection. Phase 3 — nice but not essential.</p>
+</section>
+
+<!-- ================================================================ -->
+<section id="a11y">
+  <h2><span class="num">11</span>Accessibility</h2>
+  <p class="lead">The current table has no roles, no keyboard focus, and the delete "button" is nested inside a clickable row. Fix these.</p>
+  <ul>
+    <li>The master list is a <code>&lt;ul role="listbox"&gt;</code> of <code>&lt;li role="option"&gt;</code> buttons, not a <code>&lt;table&gt;</code>. (The table semantics never fit a file browser.)</li>
+    <li>Active selection tracked via <code>aria-activedescendant</code> on the listbox so screen readers announce the focused file.</li>
+    <li>Delete is a real <code>&lt;button&gt;</code> with <code>aria-label</code>, not a clickable <code>&lt;td&gt;</code>. The inline confirm popover uses <code>role="dialog"</code> and traps focus while open.</li>
+    <li>Toasts are <code>role="status"</code> <code>aria-live="polite</code>; Undo toasts are <code>aria-live="assertive"</code>.</li>
+    <li>Color is never the only signal: selected row has both the blue accent <em>and</em> a left border <em>and</em> an icon. Type badges use text labels, not color alone.</li>
+    <li>Maintain the app's existing light/slate palette and contrast — no new dark mode in this phase.</li>
+  </ul>
+</section>
+
+<!-- ================================================================ -->
+<section id="data">
+  <h2><span class="num">12</span>Data &amp; backend notes</h2>
+  <p class="lead">What changes, if anything, server-side. The plan is engineered to need almost nothing.</p>
+
+  <h3>Used as-is (no change)</h3>
+  <ul class="checks">
+    <li><code>GET /api/files/{category}</code> — already returns <code>name, size, size_h, modified, modified_h, rel, title?</code>. The redesign uses <code>rel</code> properly.</li>
+    <li><code>GET /api/file/{category}/{path}</code> — content fetch unchanged.</li>
+    <li><code>DELETE /api/file/{category}/{path}</code> — soft-delete already moves to trash.</li>
+    <li><code>GET /api/trash</code>, <code>POST /api/trash/restore</code>, <code>DELETE /api/trash</code> — wired in <code>api.ts</code>, just need UI.</li>
+    <li><code>POST /api/promote</code> — exists, used in AskTab; reuse for outputs.</li>
+  </ul>
+
+  <h3>One small, optional backend change <span class="pill backend">Backend</span></h3>
+  <p>In <code>list_files</code> (the wiki branch), the handler already loads <code>wiki_index.json</code> for titles. Extend the merged <code>meta</code> dict to also include <code>words</code> and <code>links_to</code> from the same entry:</p>
+<pre><code># inside the wiki branch, where titles[fname] = entry["title"]
+if isinstance(entry, dict):
+    titles[fname] = entry.get("title")
+    meta.setdefault("wiki", {})  # or flatten:
+    meta["words"] = entry.get("words")
+    meta["links_to"] = entry.get("links_to", [])</code></pre>
+  <p>And add <code>words?: number</code> and <code>links_to?: string[]</code> to the <code>FileMeta</code> TypeScript interface. Frontend treats both as optional so it never breaks if the index is missing.</p>
+
+  <h3>Frontend-only fallback if the backend change is declined</h3>
+  <p>Skip the word-count chip and outbound-links sidebar. The rest of the redesign ships without them. They're "Should", not "Must".</p>
+
+  <h3>Client-side download for binary files</h3>
+  <p>Today <code>api.getFile</code> returns <code>previewable: false</code> with no body for binaries. For the "Download original" action on binary files, fetch the raw bytes directly from a served static path or add a minimal <code>GET /api/file/{category}/{path}?raw=1</code> that streams the file with <code>Content-Disposition: attachment</code>. Prefer the query-param route — it's a 5-line addition and avoids exposing raw filesystem paths. <span class="pill backend">Backend</span> <span class="pill nice">Nice</span></p>
+</section>
+
+<!-- ================================================================ -->
+<section id="phases">
+  <h2><span class="num">13</span>Implementation phases</h2>
+  <p class="lead">Each phase is independently shippable and leaves the app usable at every step.</p>
+
+  <h3>Phase 1 — Structure &amp; safety <span class="pill must">Must</span></h3>
+  <ol>
+    <li>Replace the stacked layout with the master–detail split (command bar + two columns; mobile collapse).</li>
+    <li>Rebuild the master list as a <code>role="listbox"</code> of button rows showing <code>rel</code>, type badge, size, and modified; selected row styled with accent + border.</li>
+    <li>Move sort to a compact dropdown in the command bar; keep existing keys; set category-specific defaults.</li>
+    <li>Move Delete to hover/focus with an inline confirm popover; add the Undo toast wired to <code>api.restoreTrash</code>.</li>
+    <li>Add the Trash chip + drawer (list, per-item restore, empty-all with confirm). Uses existing <code>api.listTrash/restoreTrash/emptyTrash</code>.</li>
+    <li>Fix the internal-link resolver to look up against the wiki list regardless of active category; drop strike-through for broken links.</li>
+    <li>Honest truncation banner replacing the silent 100k slice.</li>
+    <li>Actionable empty states with navigation buttons to Ingest/Compile/Ask (thread <code>onNavigate</code> into <code>ExplorerTab</code>).</li>
+    <li>Keyboard: <kbd>/</kbd>, <kbd>Esc</kbd>, <kbd>↑↓</kbd>, <kbd>Enter</kbd>, <kbd>1</kbd>–<kbd>3</kbd>.</li>
+  </ol>
+
+  <h3>Phase 2 — Richness <span class="pill should">Should</span></h3>
+  <ol>
+    <li>Backend: merge <code>words</code> + <code>links_to</code> into wiki <code>FileMeta</code> (the one small change).</li>
+    <li>Word-count chip on wiki rows; words + link count in detail subtitle.</li>
+    <li>Outbound-links sidebar in the detail pane (wiki only), click-to-navigate.</li>
+    <li>Folder grouping for <code>raw/</code> with collapsible groups and counts.</li>
+    <li>Detail toolbar: Download original, Copy content, Copy path, Promote (outputs).</li>
+    <li>Filter result count ("3 of 42 match") + path-aware matching.</li>
+    <li>Toast system promoted to app root; used by promote/copy/delete.</li>
+  </ol>
+
+  <h3>Phase 3 — Polish <span class="pill nice">Nice</span></h3>
+  <ol>
+    <li>URL state (<code>?tab=&amp;file=</code>) with <code>history.replaceState</code>.</li>
+    <li>Filter chips by extension/folder for large <code>raw/</code> sets.</li>
+    <li>Pin <code>wiki/INDEX.md</code> with an "index" badge.</li>
+    <li>Optional binary download endpoint (<code>?raw=1</code>) and Download-original on non-previewable files.</li>
+    <li>Line-wrap toggle for the code preview; remember preference in <code>localStorage</code>.</li>
+    <li>Remember last-selected category and last sort per category in <code>localStorage</code>.</li>
+  </ol>
+</section>
+
+<!-- ================================================================ -->
+<section id="scope">
+  <h2><span class="num">14</span>Non-goals &amp; open questions</h2>
+
+  <h3>Explicitly out of scope</h3>
+  <ul>
+    <li><strong>Full-text/content search.</strong> The app's semantic search lives in the Ask tab via FAISS. Explorer filter stays lexical and instant. A grep endpoint is a separate feature.</li>
+    <li><strong>Multi-file selection &amp; bulk operations.</strong> Adds complexity (bulk delete, bulk promote) for a personal KB with modest file counts. Not worth it until there's a demonstrated need.</li>
+    <li><strong>Rename / move / create.</strong> The KB's workflow is "raw in → wiki compiled → outputs generated". Manual file ops aren't part of it; the backend has no endpoints for them and we shouldn't add them here.</li>
+    <li><strong>Drag-and-drop upload.</strong> Belongs to the Ingest tab, not Explorer.</li>
+    <li><strong>Dark mode.</strong> The app is light/slate today; matching it is correct. A theme pass is a separate effort.</li>
+    <li><strong>New dependencies.</strong> No virtualization library, no icon font, no toast library, no DnD kit. Everything above is doable with existing React + Tailwind.</li>
+  </ul>
+
+  <h3>Open questions for the maintainer</h3>
+  <ul class="checks">
+    <li class="q">Should the Trash drawer live in the Explorer, or as a shared app-level control (e.g., in the Sidebar)? Explorer is the natural home, but the Sidebar already shows file counts and could host a trash badge.</li>
+    <li class="q">For <code>raw/</code> folder grouping, is "group by top-level subdirectory" sufficient, or do you want deeper nesting (e.g., <code>emails/2024/</code>)? Top-level is recommended first; deeper is a config knob later.</li>
+    <li class="q">Is the one backend change (wiki <code>words</code>/<code>links_to</code> in the files payload) acceptable, or should phase 2 ship frontend-only and drop the wiki richness?</li>
+    <li class="q">Should the Undo toast restore immediately on click, or queue the restore and run it on the next refresh? Immediate is simpler and matches user expectation; queueing is safer if restores are slow.</li>
+    <li class="q">Outputs' <code>qa-*.md</code> files have timestamps in the filename — do you want a "group by date" view for outputs, or is the newest-first flat list enough?</li>
+  </ul>
+</section>
+
+<footer>
+  End of plan · GSA-kb Explorer redesign · grounded in <code>ExplorerTab.tsx</code>, <code>api.ts</code>, <code>backend/app.py</code>, and <code>kb/index/wiki_index.json</code> as they exist today.
+</footer>
+
+</div>
+</body>
+</html>

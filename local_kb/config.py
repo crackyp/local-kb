@@ -12,6 +12,12 @@ _CFG_DEFAULTS = {
         "timeout": 1800,
         "models": [],
     },
+    "llamacpp_remote": {
+        "host": "127.0.0.1",
+        "chat_port": 8080,
+        "timeout": 1800,
+        "models": [],
+    },
     "compile": {
         "temperature": 0.2,
         "max_source_chars": 192000,

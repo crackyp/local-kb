@@ -2,7 +2,7 @@
 # Edit these values to customise behaviour. Delete any line to use its default.
 
 [model]
-default = "qwen3.6-27b-full"
+default = "deepseek-v4-flash"
 
 [llamacpp]
 host = "127.0.0.1"
@@ -12,16 +12,26 @@ timeout = 1200             # seconds per LLM call
 # Tag dropdown shown in the UI sidebar. These names are aliases configured
 # in H:\llama-swap\config.yaml; sending one as the "model" field tells
 # llama-swap which underlying llama-server to load.
+# Mirrors the models in ~/.pi/agent/models.json (llama-swap provider).
 models = [
-  "qwen3.6-27b-full",
-  "qwen3-6_27b_turbo",
-  "qwopus:3.6-35b-A3B-v1",
-  "gemma4:e4b",
+  "qwen3.6-27b",          # qwen3.6-27b-256k (full 256K, text-only)
+  "qwopus:3.6-35b-A3B-v1", # qwopus3.6-35b-a3b (MoE + vision)
+  "gemma4:e4b",           # gemma4-e4b (+ vision)
+]
+
+[llamacpp_remote]
+host = "192.168.4.38"
+chat_port = 8080           # llama-swap-remote
+timeout = 1200
+# Mirrors the models in ~/.pi/agent/models.json (llama-swap-remote provider).
+models = [
+  "deepseek-v4-flash",    # DeepSeek V4 Flash (512K ctx)
+  "qwen3.6-35b-a3b",      # Qwen3.6 35B-A3B MoE (256K ctx)
 ]
 
 [compile]
 temperature = 0.2
-max_source_chars = 250000  # chars sent to the LLM per source doc
+max_source_chars = 524288  # chars sent to the LLM per source doc
 related_pages_top_k = 5    # how many similar existing wiki pages to feed into the compile prompt
 
 [ask]

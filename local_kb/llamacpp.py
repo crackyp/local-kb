@@ -82,31 +82,118 @@ class LlamaServerManager:
         return self.base_url
 
 
-_chat_manager: Optional[LlamaServerManager] = None
+_provider_managers: Optional[dict] = None
 _embed_manager: Optional[LlamaServerManager] = None
 _managers_lock = threading.Lock()
 
 
-def get_chat_manager() -> LlamaServerManager:
-    global _chat_manager
+def _discover_providers() -> dict:
+    """Discover all [llamacpp*] sections in CFG and build server managers.
+
+    Returns a dict: { provider_name: {"manager": LlamaServerManager, "models": set[str]} }
+    The primary provider is always named "llamacpp" (from [llamacpp] in kb.toml).
+    Additional providers are any [llamacpp_*] sections.
+    """
+    global _provider_managers
+    if _provider_managers is not None:
+        return _provider_managers
+
+    result: dict = {}
+    all_keys = dict(CFG)
+
+    # Primary provider: [llamacpp]
+    primary_cfg = all_keys.get("llamacpp", {})
+    if primary_cfg:
+        result["llamacpp"] = {
+            "manager": LlamaServerManager(
+                host=primary_cfg.get("host", "127.0.0.1"),
+                port=int(primary_cfg.get("chat_port", 8080)),
+            ),
+            "models": {str(m) for m in (primary_cfg.get("models") or [])},
+        }
+
+    # Additional providers: [llamacpp_*]
+    for key, value in all_keys.items():
+        if key != "llamacpp" and key.startswith("llamacpp_") and isinstance(value, dict):
+            host = value.get("host", "127.0.0.1")
+            port = int(value.get("chat_port", 8080))
+            models = {str(m) for m in (value.get("models") or [])}
+            if models:  # only register if it has models defined
+                result[key] = {
+                    "manager": LlamaServerManager(host=host, port=port),
+                    "models": models,
+                }
+
     with _managers_lock:
-        if _chat_manager is None:
-            cfg = _llamacpp_cfg()
-            _chat_manager = LlamaServerManager(
-                host=cfg.get("host", "127.0.0.1"),
-                port=int(cfg.get("chat_port", 8080)),
-            )
-        return _chat_manager
+        _provider_managers = result
+    return result
+
+
+def get_chat_manager(provider: str = "llamacpp") -> LlamaServerManager:
+    """Return the LlamaServerManager for a given provider name."""
+    providers = _discover_providers()
+    if provider in providers:
+        return providers[provider]["manager"]
+    # Fall back to primary
+    primary = providers.get("llamacpp", {})
+    mgr = primary.get("manager")
+    if mgr is not None:
+        return mgr
+    # Last resort: build from raw config
+    cfg = _llamacpp_cfg()
+    return LlamaServerManager(
+        host=cfg.get("host", "127.0.0.1"),
+        port=int(cfg.get("chat_port", 8080)),
+    )
+
+
+def resolve_provider(model: str) -> tuple[LlamaServerManager, str]:
+    """Find which provider serves the given model.
+
+    Accepts both plain names (``qwen3.6-27b``) and prefixed names
+    (``remote/qwen3.6-27b``). Returns ``(manager, provider_name)``.
+    Raises ``ValueError`` if the model is not found.
+    """
+    providers = _discover_providers()
+
+    # Handle provider/model prefix
+    target_model: str = model
+    forced_provider: str | None = None
+    if "/" in model:
+        parts = model.split("/", 1)
+        forced_provider = parts[0]
+        target_model = parts[1]
+
+    # If provider was forced, look it up directly
+    if forced_provider:
+        full_key = f"llamacpp_{forced_provider}" if forced_provider != "local" else "llamacpp"
+        if full_key in providers and target_model in providers[full_key]["models"]:
+            return providers[full_key]["manager"], full_key
+        raise ValueError(
+            f"Provider '{forced_provider}' does not have model '{target_model}'."
+        )
+
+    # Otherwise search all providers (first match wins)
+    for name, info in providers.items():
+        if target_model in info["models"]:
+            return info["manager"], name
+
+    raise ValueError(
+        f"Model '{model}' not found in any configured provider. "
+        f"Available: {', '.join(m for p in providers.values() for m in p['models'])}"
+    )
 
 
 def get_embed_manager() -> LlamaServerManager:
+    """Return the embed server manager (always from primary [llamacpp] section)."""
     global _embed_manager
     with _managers_lock:
         if _embed_manager is None:
             cfg = _llamacpp_cfg()
+            embed_port = cfg.get("embed_port", 11434)
             _embed_manager = LlamaServerManager(
                 host=cfg.get("host", "127.0.0.1"),
-                port=int(cfg.get("embed_port", 11434)),
+                port=int(embed_port),
             )
         return _embed_manager
 
@@ -140,17 +227,26 @@ def _post_json(url: str, payload: dict, timeout: int) -> dict:
         raise RuntimeError(f"server call failed: {e}")
 
 
-def ping() -> bool:
-    """Return True if the chat server is reachable."""
-    return get_chat_manager().is_alive()
+def ping(provider: str = "llamacpp") -> bool:
+    """Return True if a specific provider's server is reachable.
+
+    If no provider is given, checks the primary (llamacpp) provider.
+    """
+    return get_chat_manager(provider).is_alive()
+
+
+def ping_any() -> bool:
+    """Return True if any provider's server is reachable."""
+    providers = _discover_providers()
+    return any(info["manager"].is_alive() for info in providers.values())
 
 
 def is_ready() -> bool:
-    """Alias for :func:`ping` — kept for callers that import this name."""
-    return ping()
+    """Alias for :func:`ping_any` — kept for callers that import this name."""
+    return ping_any()
 
 
-def loaded_model() -> Optional[str]:
+def loaded_model(provider: str = "llamacpp") -> Optional[str]:
     """Return the model id currently resident in memory, or None.
 
     Tries llama-swap's ``/running`` endpoint first (returns only models with a
@@ -159,7 +255,7 @@ def loaded_model() -> Optional[str]:
     the loaded model. With llama-swap that endpoint lists *all configured*
     models and is therefore meaningless for "what's loaded".
     """
-    mgr = get_chat_manager()
+    mgr = get_chat_manager(provider)
     if not mgr.is_alive():
         return None
 
@@ -197,16 +293,22 @@ def loaded_model() -> Optional[str]:
 
 
 def generate(prompt: str, model: str, temperature: float = 0.2) -> str:
-    """Run a chat completion against the chat server."""
+    """Run a chat completion against the correct provider's chat server."""
     cfg = _llamacpp_cfg()
-    base_url = get_chat_manager().ensure_running(model)
+    mgr, provider_name = resolve_provider(model)
+    base_url = mgr.ensure_running(model)
+
+    # Use timeout from the provider's config section if available
+    provider_cfg = CFG.get(provider_name, cfg)
+    timeout = int(provider_cfg.get("timeout", cfg.get("timeout", 1200)))
+
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": temperature,
         "stream": False,
     }
-    body = _post_json(f"{base_url}/chat/completions", payload, timeout=int(cfg["timeout"]))
+    body = _post_json(f"{base_url}/chat/completions", payload, timeout=timeout)
     choices = body.get("choices") or []
     if not choices:
         return ""
@@ -243,13 +345,36 @@ def embed(texts: list, model: str, timeout: Optional[int] = None) -> list:
 
 
 def list_models() -> list[str]:
-    """Return the list of configured chat-model tags.
+    """Return the list of configured chat-model tags across all providers.
 
-    Reads from ``[llamacpp] models`` in kb.toml. Falls back to the default
-    model. Does not query the server.
+    Reads from ``[llamacpp] models`` and any ``[llamacpp_*]`` sections in kb.toml.
+    Falls back to the default model. Does not query the server.
+
+    If a model name appears in multiple providers it is prefixed with
+    ``provider/model`` so the UI dropdown has unique keys.
     """
-    cfg = _llamacpp_cfg()
-    tags = cfg.get("models", []) or []
-    if isinstance(tags, list) and tags:
-        return [str(t) for t in tags]
-    return [CFG["model"]["default"]]
+    providers = _discover_providers()
+    if not providers:
+        return [CFG["model"]["default"]]
+
+    # Collect all (display_tag, model_name, provider_name) tuples
+    entries: list[tuple[str, str, str]] = []
+    for name, info in providers.items():
+        for model in info["models"]:
+            entries.append((model, model, name))
+
+    # Detect duplicates
+    seen: dict[str, int] = {}
+    for _, model, _ in entries:
+        seen[model] = seen.get(model, 0) + 1
+    dupes = {m for m, c in seen.items() if c > 1}
+
+    # Prefix duplicates with provider short-name
+    result: list[str] = []
+    for display, model, provider in entries:
+        if model in dupes:
+            short = provider.replace("llamacpp_", "")  # e.g. "local" or "remote"
+            result.append(f"{short}/{model}")
+        else:
+            result.append(display)
+    return result
