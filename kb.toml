@@ -2,7 +2,7 @@
 # Edit these values to customise behaviour. Delete any line to use its default.
 
 [model]
-default = "deepseek-v4-flash"
+default = "qwen3.6-35b-a3b"
 
 [llamacpp]
 host = "127.0.0.1"

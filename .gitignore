@@ -37,3 +37,6 @@ kb/index/*
 
 # Temp upload staging
 .tmp_uploads/
+
+# Bundled LLM models (auto-downloaded, ~2-22 GB each)
+.llama/
