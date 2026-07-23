@@ -13,7 +13,7 @@ if errorlevel 1 (
     echo.
     echo Preflight failed. Fix the [FAIL] items above before launching.
     echo - For port conflicts, set KB_API_PORT / KB_FRONTEND_PORT.
-    echo - For the chat backend, start llama-swap ^(e.g. H:\llama-swap^).
+    echo - For the chat backend, start llama-swap.
     pause
     exit /b 1
 )

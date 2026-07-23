@@ -54,7 +54,8 @@ export function useFileList(category: "raw" | "wiki" | "outputs") {
   }, [category]);
 
   useEffect(() => {
-    refresh();
+    const id = window.setTimeout(() => { void refresh(); }, 0);
+    return () => window.clearTimeout(id);
   }, [refresh]);
 
   const removeLocal = useCallback((rel: string) => {

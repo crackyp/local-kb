@@ -110,7 +110,7 @@ def check_llamacpp() -> bool:
     except Exception:
         _warn(
             f"llama-swap not reachable at http://{cfg['host']}:{cfg['chat_port']} — "
-            "start it (e.g. H:\\llama-swap) before launching the UI."
+            "start it before launching the UI."
         )
         return False
 

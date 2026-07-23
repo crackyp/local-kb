@@ -18,7 +18,7 @@ You collect source material in `kb/raw/`, run a compile step with a local LLM (s
 ## Repo layout
 
 ```text
-GSA-kb/
+local-kb/
   kb/
     raw/          # source docs
       assets/     # downloaded images from URL ingest
@@ -50,7 +50,7 @@ This app does not manage either server's lifecycle — start them yourself befor
 
 ```bash
 git clone https://github.com/crackyp/local-kb.git
-cd GSA-kb
+cd local-kb
 pip install -r requirements.txt
 cd frontend && npm install && cd ..
 python start-ui.py
@@ -111,7 +111,13 @@ Drop any of these into `kb/raw/` (or use the **Files** upload tab) and the next 
 
 See: [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)
 
-## 7) Notes
+## 7) Public safety notes
+
+- Keep personal source material out of git. The repo tracks only `.gitkeep` placeholders under `kb/raw/`, `kb/wiki/`, `kb/outputs/`, and `kb/index/`.
+- `kb/.trash/`, local Claude settings, tuning files, uploads, caches, and generated indexes are ignored.
+- The API binds to `127.0.0.1` by default and is intended for local use, not direct internet exposure.
+
+## 8) Notes
 
 - This is local-first. Nothing leaves your machine — all LLM and embedding calls go to `127.0.0.1`.
 - `compile` is incremental by default; use `--force` to recompile everything.

@@ -34,7 +34,7 @@ This app does not manage either server's lifecycle — start llama-swap and your
 
 ```bash
 git clone https://github.com/crackyp/local-kb.git
-cd GSA-kb
+cd local-kb
 pip install -r requirements.txt
 cd frontend && npm install && cd ..
 ```
@@ -50,7 +50,7 @@ Configure `kb.toml`:
 ## First Run
 
 ```bash
-cd GSA-kb
+cd local-kb
 python scripts/kb.py compile --model qwopus:v3
 python scripts/kb.py ask "What is this project for?" --model qwopus:v3
 python scripts/kb.py lint
@@ -144,7 +144,7 @@ python scripts/kb.py lint
 Open this folder as your vault root:
 
 ```text
-GSA-kb/kb
+local-kb/kb
 ```
 
 ---
@@ -204,7 +204,7 @@ python -m pip install -r requirements.txt
 ## Updating from older version
 
 ```bash
-cd GSA-kb
+cd local-kb
 git pull
 python -m pip install -r requirements.txt
 ```

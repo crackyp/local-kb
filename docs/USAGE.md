@@ -24,7 +24,7 @@ Set these before launching to change defaults. The frontend reads `NEXT_PUBLIC_A
 Use the CLI directly — no web server needed.
 
 ```bash
-cd GSA-kb
+cd local-kb
 python scripts/kb.py ingest /path/to/files
 python scripts/kb.py compile
 python scripts/kb.py ask "What is ...?"
@@ -74,7 +74,7 @@ npm run build
 npm run start -- --port 3000
 
 # In another terminal — run backend without --reload
-cd GSA-kb
+cd local-kb
 python -m uvicorn backend.app:app --host 127.0.0.1 --port 8000
 ```
 

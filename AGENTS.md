@@ -7,7 +7,7 @@ A local-first personal knowledge base. Raw source material goes into `kb/raw/`, 
 ## Architecture
 
 ```
-GSA-kb/
+local-kb/
   scripts/
     kb.py              # CLI entry point (all commands)
     faiss_index.py     # FAISS semantic indexing (chunking, embedding, search)

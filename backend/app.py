@@ -222,6 +222,27 @@ def safe_name(name: str) -> str:
     return cleaned or f"upload-{dt.datetime.now().strftime('%Y%m%d%H%M%S')}"
 
 
+def category_base(category: str) -> Path:
+    if category == "raw":
+        return RAW
+    if category == "wiki":
+        return WIKI
+    if category == "outputs":
+        return OUTPUTS
+    _error_response("INVALID_CATEGORY", f"Invalid category: {category}", 400)
+
+
+def resolve_category_file(category: str, path: str) -> tuple[Path, Path]:
+    """Resolve a user-provided file path and keep it inside its category."""
+    base = category_base(category).resolve()
+    file_path = (base / path).resolve()
+    try:
+        file_path.relative_to(base)
+    except ValueError:
+        _error_response("INVALID_PATH", "Path escapes the selected category", 400)
+    return base, file_path
+
+
 def _error_response(code: str, message: str, status: int = 500):
     """Raise an HTTPException with a structured error body."""
     raise HTTPException(
@@ -937,18 +958,11 @@ async def list_files(category: str):
 
 @app.get("/api/file/{category}/{path:path}")
 async def get_file(category: str, path: str):
-    if category == "raw":
-        base = RAW
-    elif category == "wiki":
-        base = WIKI
-    elif category == "outputs":
-        base = OUTPUTS
-    else:
-        _error_response("INVALID_CATEGORY", f"Invalid category: {category}", 400)
-
-    file_path = base / path
+    _, file_path = resolve_category_file(category, path)
     if not file_path.exists():
         _error_response("FILE_NOT_FOUND", "File not found", 404)
+    if not file_path.is_file():
+        _error_response("INVALID_PATH", "Path is not a file", 400)
 
     if file_path.suffix.lower() in PREVIEWABLE:
         content = file_path.read_text(encoding="utf-8", errors="ignore")
@@ -966,18 +980,11 @@ async def delete_file(category: str, path: str):
     from local_kb.index_state import remove_page_from_index, remove_page_from_wiki_index
     from local_kb.audit import log_action
 
-    if category == "raw":
-        base = RAW
-    elif category == "wiki":
-        base = WIKI
-    elif category == "outputs":
-        base = OUTPUTS
-    else:
-        _error_response("INVALID_CATEGORY", f"Invalid category: {category}", 400)
-
-    file_path = base / path
+    _, file_path = resolve_category_file(category, path)
     if not file_path.exists():
         _error_response("FILE_NOT_FOUND", "File not found", 404)
+    if not file_path.is_file():
+        _error_response("INVALID_PATH", "Path is not a file", 400)
 
     try:
         # Soft-delete: move to trash instead of permanent removal
@@ -993,7 +1000,12 @@ async def delete_file(category: str, path: str):
             except Exception:
                 pass  # non-fatal: index will catch up on next rebuild
 
-        return {"success": True, "deleted": str(file_path), "trash": str(trash_path)}
+        return {
+            "success": True,
+            "deleted": str(file_path),
+            "trash": str(trash_path),
+            "trash_name": trash_path.name,
+        }
     except Exception as e:
         _error_response("DELETE_FAILED", str(e))
 

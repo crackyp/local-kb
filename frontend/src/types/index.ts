@@ -67,7 +67,7 @@ export interface IndexRequest {
 export interface Recommendation {
   message: string;
   action?: string;
-  payload?: Record<string, any>;
+  payload?: Record<string, unknown>;
 }
 
 export interface CommandResponse {
