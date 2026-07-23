@@ -22,11 +22,11 @@ You can do this either from CLI (`scripts/kb.py`) or from the Next.js web UI.
 
 - Windows, macOS, Linux, or WSL
 - Python 3.11+
-- **llama-swap** running on `127.0.0.1:8080` (default). It fronts `llama-server` and swaps the underlying model based on the request's `model` field. Chat-model aliases listed in `kb.toml [llamacpp] models` must exist in llama-swap's own `config.yaml`.
+- **A local chat server** running on `127.0.0.1:8080` (default). Use `python start-llm.py` to download and run the bundled Qwen/Gemma models, or run llama-swap with matching aliases.
 - **An embedding server** on `127.0.0.1:11434` (default — Ollama, serving e.g. `nomic-embed-text:latest`). Any OpenAI-compatible `/v1/embeddings` endpoint works. Set `[faiss] enabled = false` in `kb.toml` to skip embeddings and use TF-IDF instead.
 - Optional UI: Node.js 18+
 
-This app does not manage either server's lifecycle — start llama-swap and your embed server yourself.
+This app does not manage either server's lifecycle — start the local chat server and your embed server yourself.
 
 ---
 
@@ -40,8 +40,8 @@ cd frontend && npm install && cd ..
 ```
 
 Configure `kb.toml`:
-- `[model] default` — default chat tag (must match an alias in llama-swap's `config.yaml`)
-- `[llamacpp] chat_port` / `embed_port` — where llama-swap and your embed server are listening
+- `[model] default` — default chat tag (must match the bundled model tag or a llama-swap alias)
+- `[llamacpp] chat_port` / `embed_port` — where the local chat server and your embed server are listening
 - `[llamacpp] models` — chat-model alias dropdown shown in the UI sidebar
 - `[faiss] embed_model` — tag for the embedding model on the embed server
 
@@ -171,19 +171,19 @@ Drop the file into `kb/raw/` (or use the **Files** upload tab) and the next `com
 
 ## Model Tips
 
-- llama-swap hot-swaps the underlying `llama-server` when the requested tag changes — expect a one-off ~3-10 s reload the first time you hit a new model. Group calls by model when possible.
+- The bundled `start-llm.py` runs one selected model at a time. If you use llama-swap instead, expect a one-off reload the first time you hit a new model. Group calls by model when possible.
 - The embedding server stays on its own port with one fixed model — no swap penalty.
-- Per-model flag tuning (gpu layers, batch size, cache types, etc.) lives in llama-swap's `config.yaml`, not in this repo.
+- For the bundled server, tune GPU layers and threads with `start-llm.py --ngpu` and `--threads`. For llama-swap, tune those in llama-swap's config.
 
 ---
 
 ## Troubleshooting
 
-### `llama-swap is not reachable at 127.0.0.1:8080`
-Start llama-swap before launching the UI. Check it's bound to the host/port configured in `kb.toml [llamacpp] host` / `chat_port`.
+### `local chat server is not reachable at 127.0.0.1:8080`
+Start `python start-llm.py` (or llama-swap) before launching the UI. Check it's bound to the host/port configured in `kb.toml [llamacpp] host` / `chat_port`.
 
 ### `model 'X' not configured in kb.toml`
-Add the tag to `kb.toml [llamacpp] models` (and make sure llama-swap's `config.yaml` defines a matching alias).
+Add the tag to `kb.toml [llamacpp] models` and make sure your local chat server can serve it.
 
 ### `No relevant wiki pages found`
 Compile first:

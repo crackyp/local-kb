@@ -5,10 +5,10 @@ Usage:
     python start-llm.py              # Use default model from kb.toml
     python start-llm.py --model gemma4-e2b
     python start-llm.py --model qwen3.6-35b-a3b
-    python start-llm.py --port 8081  # Custom port
+    python start-llm.py --port 8081  # Custom port if you also update kb.toml
 
 Environment variables:
-    KB_LLM_PORT      Server port (default 8081)
+    KB_LLM_PORT      Server port (default 8080)
     KB_LLM_MODEL     Model name (overrides kb.toml default)
     KB_LLM_NGPU      GPU layers 0=cpu (default 99=all)
     KB_LLM_NTHREADS  CPU threads (default 8)
@@ -32,7 +32,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 LLM_DIR = ROOT / ".llama"  # Where downloaded models live
-LLM_PORT = int(os.environ.get("KB_LLM_PORT", "8081"))
+LLM_PORT = int(os.environ.get("KB_LLM_PORT", "8080"))
 DEFAULT_N_GPU = 99
 DEFAULT_N_THREADS = 8
 
@@ -83,7 +83,7 @@ def _read_toml(path: Path) -> dict | None:
 def model_path(tag: str) -> Path:
     """Return the expected path for a model by tag."""
     info = MODELS[tag]
-    return LLM_DIR / "models" / f"{info['repo'].replace('/', '--')}--{info['filename']}"
+    return LLM_DIR / "models" / tag / info["filename"]
 
 
 def download_model(tag: str) -> Path:
