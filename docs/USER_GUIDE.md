@@ -35,7 +35,7 @@ This app does not manage either server's lifecycle — start the local chat serv
 ```bash
 git clone https://github.com/crackyp/local-kb.git
 cd local-kb
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 cd frontend && npm install && cd ..
 ```
 
@@ -46,6 +46,14 @@ Configure `kb.toml`:
 - `[faiss] embed_model` — tag for the embedding model on the embed server
 
 ---
+
+### Optional OCR support
+
+Core install keeps dependencies light. If you need scanned/image PDF OCR fallback, install the optional OCR extras:
+
+```bash
+python -m pip install -r requirements-ocr.txt
+```
 
 ## First Run
 
@@ -63,7 +71,7 @@ python scripts/kb.py lint
 Launch UI:
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 cd frontend && npm install && cd ..
 python start-ui.py
 ```
@@ -158,7 +166,7 @@ local-kb/kb
 - Code/config/log text files
 
 ### Office docs (text auto-extracted on compile)
-- `.pdf` — `pypdf` with OCR fallback (`easyocr` + `pymupdf`) for scanned/image PDFs. Also has a dedicated `ingest-pdf` CLI command / **PDF** UI tab that extracts to markdown upfront so you can review before compiling.
+- `.pdf` — `pypdf` for text-layer PDFs. Optional scanned/image PDF OCR fallback requires `python -m pip install -r requirements-ocr.txt`. Also has a dedicated `ingest-pdf` CLI command / **PDF** UI tab that extracts to markdown upfront so you can review before compiling.
 - `.docx` — `python-docx`
 - `.pptx` — `python-pptx`
 
@@ -193,10 +201,17 @@ python scripts/kb.py compile --model qwopus:v3
 ```
 
 ### `PDF ingest requires pypdf`
-Install dependencies:
+Install core dependencies:
 
 ```bash
 python -m pip install -r requirements.txt
+```
+
+### Scanned PDFs return no text
+Install optional OCR support:
+
+```bash
+python -m pip install -r requirements-ocr.txt
 ```
 
 ---
@@ -216,7 +231,7 @@ Your existing data in `kb/raw`, `kb/wiki`, `kb/outputs`, and `kb/index` stays in
 ## FAQ
 
 ### Does this send my data to the cloud?
-No. All LLM and embedding calls go to a local `llama-server` process bound to `127.0.0.1`.
+No. All LLM and embedding calls go to a local `llama-server` process bound to `127.0.0.1` by default. Do not expose the API or UI publicly without adding authentication and network controls.
 
 ### Can I use this without Obsidian?
 Yes. Obsidian is optional; files are plain markdown on disk.

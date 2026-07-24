@@ -2,19 +2,25 @@
 
 ## Prerequisites
 
-- Python 3.11+ with packages: `pip install -r requirements.txt`
+- Python 3.11+ with packages: `python -m pip install -r requirements.txt`
 - Node.js 18+ (for the web UI)
 - **A local chat server** running on `127.0.0.1:8080` (default). Use `python start-llm.py` for the bundled Qwen/Gemma setup, or configure llama-swap yourself.
 - **An embedding server** on `127.0.0.1:11434` (default — Ollama serving `nomic-embed-text` via OpenAI-compat). Any OpenAI-compatible `/v1/embeddings` endpoint works.
 
 Neither server is managed by this app — start them yourself before launching the UI.
 
+Optional scanned-PDF OCR support is split out to keep the core install light:
+
+```bash
+python -m pip install -r requirements-ocr.txt
+```
+
 ## Environment Variables
 
 | Variable | Default | Description |
 |---|---|---|
-| `KB_API_PORT` | `8000` | FastAPI backend port |
-| `KB_FRONTEND_PORT` | `3000` | Next.js dev server port |
+| `KB_API_PORT` | `8765` | FastAPI backend port |
+| `KB_FRONTEND_PORT` | `3737` | Next.js dev server port |
 | `KB_FRONTEND_HOST` | `localhost` | Hostname used in CORS origins |
 
 Set these before launching to change defaults. The frontend reads `NEXT_PUBLIC_API_BASE` (set automatically by the startup scripts).
@@ -65,7 +71,7 @@ start-ui.bat
 
 ## Mode 3: Production / Service
 
-Build the frontend and run the API with a production ASGI server.
+Build the frontend and run the API with a production ASGI server. Keep it bound to localhost unless you add authentication and network controls.
 
 ```bash
 # Build frontend

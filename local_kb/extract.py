@@ -16,6 +16,10 @@ def _ocr_pdf(pdf_path: Path, max_pages: int | None = None) -> str:
         import easyocr  # type: ignore
         import numpy as np  # type: ignore
     except ImportError:
+        print(
+            "  OCR support is not installed. For scanned PDFs, run: "
+            "python -m pip install -r requirements-ocr.txt"
+        )
         return ""
 
     doc = fitz.open(str(pdf_path))
