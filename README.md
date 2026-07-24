@@ -34,7 +34,8 @@ local-kb/
   start-ui.py           # starts both backend and frontend
   start-ui.bat          # Windows launcher
   kb.toml               # configuration
-  requirements.txt
+  requirements.txt       # core Python dependencies
+  requirements-ocr.txt   # optional scanned-PDF OCR dependencies
 ```
 
 ## 1) Prerequisites
@@ -46,12 +47,18 @@ local-kb/
 
 This app does not manage either server's lifecycle — start them yourself before launching the UI. The preflight check probes the chat port and warns if it isn't reachable.
 
+For scanned/image PDFs, install the optional OCR extras:
+
+```bash
+python -m pip install -r requirements-ocr.txt
+```
+
 ## 2) Quick start
 
 ```bash
 git clone https://github.com/crackyp/local-kb.git
 cd local-kb
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 cd frontend && npm install && cd ..
 # In a separate terminal, start/download the local LLM server:
 python start-llm.py
@@ -86,7 +93,7 @@ python scripts/kb.py lint
 ## 4) UI mode (Next.js)
 
 ```bash
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 cd frontend && npm install && cd ..
 python start-ui.py
 ```
@@ -102,7 +109,7 @@ Then open http://localhost:3000.
 - code/docs text files (`.py`, `.js`, `.ts`, `.ipynb`, `.sql`, `.log`, etc.)
 
 ### Office docs (text auto-extracted on compile)
-- `.pdf` (requires `pypdf`; falls back to OCR via `easyocr` + `pymupdf` for scanned PDFs). Also has a dedicated `ingest-pdf` command / **PDF** UI tab that extracts to markdown upfront.
+- `.pdf` (requires `pypdf`; optional scanned-PDF OCR fallback requires `python -m pip install -r requirements-ocr.txt`). Also has a dedicated `ingest-pdf` command / **PDF** UI tab that extracts to markdown upfront.
 - `.docx` (requires `python-docx`)
 - `.pptx` (requires `python-pptx`)
 
@@ -119,8 +126,9 @@ See: [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)
 ## 7) Public safety notes
 
 - Keep personal source material out of git. The repo tracks only `.gitkeep` placeholders under `kb/raw/`, `kb/wiki/`, `kb/outputs/`, and `kb/index/`.
-- `kb/.trash/`, local Claude settings, tuning files, uploads, caches, and generated indexes are ignored.
+- `kb/.trash/`, local tool settings, tuning files, uploads, caches, and generated indexes are ignored.
 - The API binds to `127.0.0.1` by default and is intended for local use, not direct internet exposure.
+- Do **not** expose the API or UI to the public internet without adding authentication and network controls. The app can read local files you ingest and can fetch URLs on your behalf.
 
 ## 8) Notes
 

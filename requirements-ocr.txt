@@ -1,0 +1,6 @@
+# Optional OCR support for scanned/image PDFs.
+# Install only if you need fallback OCR:
+#   python -m pip install -r requirements-ocr.txt
+-r requirements.txt
+PyMuPDF>=1.24.0
+easyocr>=1.7.0

@@ -29,10 +29,11 @@ REQUIRED_PYTHON_PACKAGES = [
     ("bs4", "beautifulsoup4"),
 ]
 
-# Optional but recommended
+# Optional capabilities. FAISS improves retrieval. OCR is only needed for scanned/image PDFs.
 OPTIONAL_PYTHON_PACKAGES = [
     ("faiss", "faiss-cpu"),
-    ("easyocr", "easyocr"),
+    ("fitz", "PyMuPDF (OCR extra)"),
+    ("easyocr", "easyocr (OCR extra)"),
 ]
 
 
@@ -64,7 +65,13 @@ def check_python_deps() -> bool:
             importlib.import_module(module_name)
             _ok(f"{pip_name} (optional)")
         except ImportError:
-            _warn(f"{pip_name} not installed (optional)  ->  pip install {pip_name}")
+            if "OCR extra" in pip_name:
+                _warn(
+                    f"{pip_name} not installed (optional)  ->  "
+                    "python -m pip install -r requirements-ocr.txt"
+                )
+            else:
+                _warn(f"{pip_name} not installed (optional)  ->  pip install {pip_name}")
 
     return all_good
 
