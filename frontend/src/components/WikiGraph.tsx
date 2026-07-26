@@ -229,9 +229,16 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
     ctx.translate(width / 2 + v.x, height / 2 + v.y);
     ctx.scale(v.k, v.k);
 
-    const neighbors = hover ? neighborsRef.current.get(hover.name) : null;
+    // Hover wins while the pointer is over a node; otherwise the current selection
+    // keeps its neighbourhood highlighted (click to pin, click empty space to clear).
+    const selectedNode = selectedRef.current
+      ? nodesRef.current.find((n) => n.file.rel === selectedRef.current) ?? null
+      : null;
+    const focus = hover ?? selectedNode;
+
+    const neighbors = focus ? neighborsRef.current.get(focus.name) : null;
     const isLit = (n: GraphNode) =>
-      !hover || n === hover || (neighbors?.has(n.name) ?? false);
+      !focus || n === focus || (neighbors?.has(n.name) ?? false);
     const matches = (n: GraphNode) =>
       !q || n.label.toLowerCase().includes(q) || n.name.toLowerCase().includes(q);
 
@@ -240,8 +247,8 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
     // turn into ribbons when zoomed in.
     ctx.lineWidth = Math.min(Math.max(s.linkThickness, 0.7 / v.k), 2.5 / v.k);
     for (const e of edgesRef.current) {
-      const active = hover != null && (e.a === hover || e.b === hover);
-      const dim = (hover != null && !active) || (!!q && !matches(e.a) && !matches(e.b));
+      const active = focus != null && (e.a === focus || e.b === focus);
+      const dim = (focus != null && !active) || (!!q && !matches(e.a) && !matches(e.b));
       ctx.strokeStyle = active ? COLOR.linkActive : dim ? COLOR.linkDim : COLOR.link;
       ctx.beginPath();
       ctx.moveTo(e.a.x, e.a.y);
@@ -262,9 +269,9 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
       let fill = COLOR.node;
       let glow = r * 0.9;
       if (isSelected) { fill = COLOR.nodeActive; glow = r * 3; }
-      else if (hover && lit) {
-        fill = n === hover ? COLOR.nodeActive : COLOR.nodeNeighbor;
-        glow = r * (n === hover ? 3 : 2);
+      else if (focus && lit) {
+        fill = n === focus ? COLOR.nodeActive : COLOR.nodeNeighbor;
+        glow = r * (n === focus ? 3 : 2);
       } else if (!lit || !hit) { fill = COLOR.nodeDim; glow = 0; }
       else if (q && hit) { fill = COLOR.nodeNeighbor; glow = r * 2; }
 
@@ -297,7 +304,7 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
       ctx.shadowBlur = 4 / v.k;
       for (const n of nodesRef.current) {
         const isSelected = n.file.rel === selectedRef.current;
-        const forced = n === hover || isSelected;
+        const forced = n === focus || isSelected;
         const alpha = forced ? 1 : fade;
         if (alpha <= 0.02) continue;
         const lit = isLit(n);
