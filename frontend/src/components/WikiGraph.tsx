@@ -163,7 +163,10 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
       const dx = e.b.x - e.a.x;
       const dy = e.b.y - e.a.y;
       const d = Math.hypot(dx, dy) || 0.01;
-      const f = ((d - s.linkDistance) / d) * s.linkForce * alpha * 0.5;
+      // Scale by 1/min(degree) as d3-force's link does. Without it a hub takes one
+      // full-strength impulse per edge each tick and overshoots into divergence.
+      const inv = 1 / Math.max(1, Math.min(e.a.deg, e.b.deg));
+      const f = ((d - s.linkDistance) / d) * s.linkForce * alpha * 0.5 * inv;
       const fx = dx * f;
       const fy = dy * f;
       e.a.vx += fx;
@@ -185,6 +188,13 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
       n.vy *= 0.6;
       n.x += n.vx;
       n.y += n.vy;
+      // A non-finite position would silently blank the canvas; reseed instead.
+      if (!Number.isFinite(n.x) || !Number.isFinite(n.y)) {
+        n.x = (Math.random() - 0.5) * 400;
+        n.y = (Math.random() - 0.5) * 400;
+        n.vx = 0;
+        n.vy = 0;
+      }
     }
   }, []);
 
