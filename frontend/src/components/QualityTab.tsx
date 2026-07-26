@@ -53,9 +53,11 @@ export function QualityTab() {
   return (
     <div className="space-y-6">
       <SectionCard title="Lint Wiki" description="Check broken markdown links and orphan pages.">
-        <ActionButton onClick={handleLint} loading={linting} loadingText="Linting...">
-          Run Lint
-        </ActionButton>
+        <div className="flex items-center gap-2">
+          <ActionButton onClick={handleLint} loading={linting} loadingText="Linting...">
+            Run Lint
+          </ActionButton>
+        </div>
       </SectionCard>
 
       <CommandResultPanel result={lintResult} />
@@ -77,7 +79,7 @@ export function QualityTab() {
 
       {healthResult?.report && (
         <SectionCard title="Health Check Report">
-          <div className="prose prose-slate prose-sm max-w-none bg-slate-50 rounded-lg p-4">
+          <div className="prose prose-zinc prose-sm max-w-none bg-zinc-50 rounded-lg p-4 transition-colors duration-150 ease-out">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{healthResult.report}</ReactMarkdown>
           </div>
         </SectionCard>

@@ -17,15 +17,17 @@ export default function HomePage() {
   return (
     <StatusProvider>
       <CompileProvider>
-        <div className="flex min-h-screen bg-slate-100">
+        <div className="flex min-h-screen bg-zinc-100">
           <Sidebar activeView={activeView} onNavigate={setActiveView} />
           <main className="flex-1 p-8 overflow-y-auto">
-            <div className="max-w-5xl mx-auto text-slate-900">
-              {activeView === "ingest" && <IngestTab />}
-              {activeView === "compile" && <CompileTab />}
-              {activeView === "chat" && <ChatTab />}
-              {activeView === "explorer" && <ExplorerTab onNavigate={setActiveView} />}
-              {activeView === "quality" && <QualityTab />}
+            <div className="max-w-5xl mx-auto text-zinc-900">
+              <div key={activeView} className="animate-in fade-in duration-200">
+                {activeView === "ingest" && <IngestTab />}
+                {activeView === "compile" && <CompileTab />}
+                {activeView === "chat" && <ChatTab />}
+                {activeView === "explorer" && <ExplorerTab onNavigate={setActiveView} />}
+                {activeView === "quality" && <QualityTab />}
+              </div>
             </div>
           </main>
         </div>

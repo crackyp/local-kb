@@ -8,6 +8,13 @@ import type { FileMeta, TrashItem, View } from "@/types";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { downloadWikiHtml } from "@/lib/exportHtml";
+import {
+  FileText,
+  Trash2,
+  RefreshCcw,
+  X,
+  FolderOpen,
+} from "lucide-react";
 
 type Category = "raw" | "wiki" | "outputs";
 const CATEGORIES: Category[] = ["wiki", "raw", "outputs"];
@@ -22,13 +29,6 @@ const PREVIEWABLE = new Set([
   ".py", ".js", ".ts", ".sql", ".log", ".toml", ".ini", ".cfg", ".sh", ".bat",
 ]);
 const TRUNCATION_LIMIT = 100_000;
-const EXT_EMOJI: Record<string, string> = {
-  md: "📄", txt: "📄", pdf: "📕", json: "📋", yaml: "⚙️", yml: "⚙️",
-  xml: "📋", csv: "📊", html: "🌐", py: "🐍", js: "🟨", ts: "🔷",
-  sql: "🗄️", log: "📝", toml: "⚙️", ini: "⚙️", cfg: "⚙️",
-  sh: "💻", bat: "💻", docx: "📘", pptx: "📙", png: "🖼️",
-  jpg: "🖼️", jpeg: "🖼️", gif: "🖼️", webp: "🖼️",
-};
 
 function isPreviewable(name: string): boolean {
   const ext = name.lastIndexOf(".") >= 0 ? name.slice(name.lastIndexOf(".")).toLowerCase() : "";
@@ -38,15 +38,11 @@ function getExt(name: string): string {
   const i = name.lastIndexOf(".");
   return i >= 0 ? name.slice(i + 1).toLowerCase() : "";
 }
-function getEmoji(name: string): string {
-  return EXT_EMOJI[getExt(name)] || "📄";
-}
 function formatCount(n: number): string {
   if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, "") + "k";
   return String(n);
 }
 function getTopFolder(rel: string): string | null {
-  // Handle both / and \ path separators (Windows uses \)
   const normalized = rel.replace(/\\/g, "/");
   const i = normalized.indexOf("/");
   return i >= 0 ? normalized.slice(0, i) : null;
@@ -72,13 +68,13 @@ function InlineConfirm({ message, confirmLabel, confirmVariant, onConfirm, onCan
   }, [onCancel]);
   return (
     <div ref={ref} role="dialog" aria-modal="true" tabIndex={-1}
-      className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-lg shadow-lg p-3 min-w-[220px]">
-      <div className="text-sm text-slate-700 mb-3">{message}</div>
+      className="absolute right-0 top-full mt-1 z-50 bg-white border border-zinc-200 rounded-lg shadow-lg p-3 min-w-[220px] transition-colors duration-150 ease-out">
+      <div className="text-sm text-zinc-700 mb-3">{message}</div>
       <div className="flex gap-2 justify-end">
         <button onClick={onCancel}
-          className="px-3 py-1.5 text-xs font-medium rounded border border-slate-300 text-slate-600 hover:bg-slate-50">Cancel</button>
+          className="px-3 py-1.5 text-xs font-medium rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 transition-colors duration-150 ease-out">Cancel</button>
         <button onClick={onConfirm}
-          className={`px-3 py-1.5 text-xs font-medium rounded text-white ${confirmVariant === "danger" ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"}`}>
+          className={`px-3 py-1.5 text-xs font-medium rounded text-white ${confirmVariant === "danger" ? "bg-red-600 hover:bg-red-700" : "bg-violet-600 hover:bg-violet-500"} transition-colors duration-150 ease-out`}>
           {confirmLabel}
         </button>
       </div>
@@ -120,43 +116,43 @@ function TrashDrawer({ open, onClose, onRestore, onEmptyTrash }: {
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} aria-hidden="true" />
-      <div role="dialog" aria-label="Trash" className="ml-auto w-full max-w-md bg-white border-l border-slate-200 shadow-xl h-full flex flex-col z-10">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-          <h2 className="font-semibold text-slate-900">Trash</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-lg leading-none" aria-label="Close trash">✕</button>
+      <div role="dialog" aria-label="Trash" className="ml-auto w-full max-w-md bg-white border-l border-zinc-200 shadow-xl h-full flex flex-col z-10 transition-colors duration-150 ease-out">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200">
+          <h2 className="font-semibold text-zinc-900 tracking-tight">Trash</h2>
+          <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-lg leading-none transition-colors duration-150 ease-out" aria-label="Close trash"><X className="w-4 h-4" /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {loading && <div className="text-sm text-slate-400 text-center py-8">Loading…</div>}
+          {loading && <div className="text-sm text-zinc-400 text-center py-8">Loading…</div>}
           {error && <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg p-3">{error}</div>}
-          {!loading && trashItems.length === 0 && <div className="text-sm text-slate-400 text-center py-8">Trash is empty</div>}
+          {!loading && trashItems.length === 0 && <div className="text-sm text-zinc-400 text-center py-8">Trash is empty</div>}
           {trashItems.map((item, idx) => (
             <div key={`${item.category}-${item.original_name}-${idx}`}
-              className="flex items-center justify-between p-3 rounded-lg border border-slate-100 hover:bg-slate-50">
+              className="flex items-center justify-between p-3 rounded-lg border border-zinc-100 hover:bg-zinc-50 transition-colors duration-150 ease-out">
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-slate-800 truncate">{item.original_name}</div>
-                <div className="text-xs text-slate-400 flex gap-2 mt-0.5">
-                  <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] uppercase">{item.category}</span>
+                <div className="text-sm font-medium text-zinc-800 truncate">{item.original_name}</div>
+                <div className="text-xs text-zinc-400 flex gap-2 mt-0.5">
+                  <span className="bg-zinc-100 px-1.5 py-0.5 rounded text-[10px] uppercase">{item.category}</span>
                   <span>{item.trashed_at}</span>
                 </div>
               </div>
               <button onClick={() => handleRestore(item)}
-                className="ml-3 px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap">Restore</button>
+                className="ml-3 px-3 py-1.5 text-xs font-medium rounded bg-violet-600 text-white hover:bg-violet-500 transition-colors duration-150 ease-out whitespace-nowrap">Restore</button>
             </div>
           ))}
         </div>
         {trashItems.length > 0 && (
-          <div className="p-4 border-t border-slate-200">
+          <div className="p-4 border-t border-zinc-200">
             {confirmEmpty ? (
               <div className="flex gap-2 items-center">
-                <span className="text-sm text-slate-600 flex-1">Empty all trash?</span>
+                <span className="text-sm text-zinc-600 flex-1">Empty all trash?</span>
                 <button onClick={() => setConfirmEmpty(false)}
-                  className="px-3 py-1.5 text-xs rounded border border-slate-300 text-slate-600 hover:bg-slate-50">Cancel</button>
+                  className="px-3 py-1.5 text-xs rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 transition-colors duration-150 ease-out">Cancel</button>
                 <button onClick={handleEmpty}
-                  className="px-3 py-1.5 text-xs rounded bg-red-600 text-white hover:bg-red-700">Empty all</button>
+                  className="px-3 py-1.5 text-xs rounded bg-red-600 text-white hover:bg-red-700 transition-colors duration-150 ease-out">Empty all</button>
               </div>
             ) : (
               <button onClick={() => setConfirmEmpty(true)}
-                className="w-full px-3 py-2 text-xs font-medium rounded border border-red-300 text-red-600 hover:bg-red-50">
+                className="w-full px-3 py-2 text-xs font-medium rounded border border-red-300 text-red-600 hover:bg-red-50 transition-colors duration-150 ease-out">
                 Empty trash ({trashItems.length} items)
               </button>
             )}
@@ -171,10 +167,10 @@ function OutboundLinks({ linksTo, wikiFiles, onNavigateTo, onClose }: {
   linksTo: string[]; wikiFiles: FileMeta[]; onNavigateTo: (file: FileMeta) => void; onClose: () => void;
 }) {
   return (
-    <div className="w-56 border-l border-slate-200 bg-slate-50 flex flex-col flex-shrink-0">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200">
-        <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Links</span>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xs" aria-label="Close links sidebar">✕</button>
+    <div className="w-56 border-l border-zinc-200 bg-zinc-50 flex flex-col flex-shrink-0 transition-colors duration-150 ease-out">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-200">
+        <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Links</span>
+        <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-xs transition-colors duration-150 ease-out" aria-label="Close links sidebar"><X className="w-3.5 h-3.5" /></button>
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
         {linksTo.map((target) => {
@@ -182,8 +178,8 @@ function OutboundLinks({ linksTo, wikiFiles, onNavigateTo, onClose }: {
           const found = wikiFiles.find((f) => f.name === targetName);
           return (
             <button key={target} onClick={() => found && onNavigateTo(found)} disabled={!found}
-              className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors ${
-                found ? "text-blue-600 hover:bg-blue-50 cursor-pointer" : "text-slate-400 cursor-default"
+              className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors duration-150 ease-out ${
+                found ? "text-violet-600 hover:bg-violet-50 cursor-pointer" : "text-zinc-400 cursor-default"
               }`}
               title={found ? `Open "${found.title || found.name}"` : "Page not found in wiki"}>
               <span className={found ? "" : "opacity-60"}>{target}</span>
@@ -540,27 +536,26 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
     const isSelected = selected?.rel === file.rel;
     const isFocused = focusIndex === index;
     const label = file.title || file.name;
-    const emoji = getEmoji(file.name);
     return (
       <div key={file.rel} data-index={index} role="option" aria-selected={isSelected} tabIndex={-1}
         onClick={() => { handleSelect(file); setFocusIndex(index); }}
         onMouseEnter={() => setFocusIndex(index)}
-        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors ${isSelected ? "bg-blue-50" : "hover:bg-slate-50"} ${isFocused && !isSelected ? "bg-slate-50" : ""}`}
-        style={{ borderLeft: isSelected ? "3px solid #3b82f6" : "3px solid transparent" }}>
-        <span className="text-base flex-shrink-0">{emoji}</span>
+        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors duration-150 ease-out ${isSelected ? "bg-violet-50" : "hover:bg-zinc-50"} ${isFocused && !isSelected ? "bg-zinc-50" : ""}`}
+        style={{ borderLeft: isSelected ? "3px solid #8b5cf6" : "3px solid transparent" }}>
+        <FileText className="w-4 h-4 text-zinc-400 flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-800 truncate">{label}</span>
+            <span className="text-sm font-medium text-zinc-800 truncate">{label}</span>
             {file.name === "INDEX.md" && <span className="text-[10px] font-semibold uppercase px-1 py-0.5 rounded bg-amber-100 text-amber-700 flex-shrink-0">index</span>}
-            {file.words && <span className="text-[10px] text-slate-400 flex-shrink-0">{formatCount(file.words)}w</span>}
+            {file.words && <span className="text-[10px] text-zinc-400 flex-shrink-0">{formatCount(file.words)}w</span>}
           </div>
-          <div className="text-xs text-slate-400 truncate">{file.rel} · {file.size_h} · {file.modified_h}</div>
+          <div className="text-xs text-zinc-400 truncate">{file.rel} · {file.size_h} · {file.modified_h}</div>
         </div>
         <button onClick={(e) => { e.stopPropagation(); setDeleteConfirm(file); }}
-          className={`text-red-400 hover:text-red-600 text-xs px-1.5 py-1 rounded hover:bg-red-50 flex-shrink-0 transition-opacity ${
+          className={`text-zinc-400 hover:text-red-600 text-xs px-1.5 py-1 rounded hover:bg-red-50 flex-shrink-0 transition-colors duration-150 ease-out ${
             isFocused || isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100 focus:opacity-100"
           }`}
-          aria-label={`Delete ${file.name}`} tabIndex={-1}>✕</button>
+          aria-label={`Delete ${file.name}`} tabIndex={-1}><X className="w-3 h-3" /></button>
       </div>
     );
   };
@@ -570,10 +565,11 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
     return (
       <div key={`folder-${folderName}`}>
         <button onClick={() => setFolderCollapsed((prev) => ({ ...prev, [folderName]: !collapsed }))}
-          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50">
+          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-zinc-500 hover:bg-zinc-50 transition-colors duration-150 ease-out">
           <span className="text-xs">{collapsed ? "▸" : "▾"}</span>
-          <span>📁 {folderName}</span>
-          <span className="text-slate-400 font-normal normal-case">({files.length})</span>
+          <FolderOpen className="w-3.5 h-3.5" />
+          <span>{folderName}</span>
+          <span className="text-zinc-400 font-normal normal-case">({files.length})</span>
         </button>
         {!collapsed && files.map((f, i) => renderRow(f, startIndex + i))}
       </div>
@@ -592,14 +588,14 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
 
   return (
     <>
-      <div className="flex flex-col h-[calc(100vh-8rem)] bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="flex flex-col h-[calc(100vh-8rem)] bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden transition-colors duration-150 ease-out">
         {/* Command bar */}
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-slate-200 bg-white flex-shrink-0">
-          <div className="flex bg-slate-100 rounded-lg p-0.5">
+        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-zinc-200 bg-white flex-shrink-0">
+          <div className="flex bg-zinc-100 rounded-lg p-0.5">
             {CATEGORIES.map((tab) => (
               <button key={tab} onClick={() => switchTab(tab)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors capitalize ${
-                  activeTab === tab ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors duration-150 ease-out capitalize ${
+                  activeTab === tab ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
                 }`}>
                 {CATEGORY_LABELS[tab]} ({lists[tab].count})
               </button>
@@ -609,24 +605,24 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
             <input ref={filterRef} type="text" value={filter}
               onChange={(e) => { setFilter(e.target.value); setFocusIndex(-1); }}
               placeholder="Filter…  (/)"
-              className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white" />
-            {filter && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400">{filteredFiles.length} of {active.files.length}</span>}
+              className="w-full px-3 py-1.5 text-xs border border-zinc-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 bg-white transition-colors duration-150 ease-out" />
+            {filter && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-zinc-400">{filteredFiles.length} of {active.files.length}</span>}
           </div>
           {/* Phase 3: Filter chips */}
           {extensionCounts.length > 0 && !filter && (
             <div className="flex gap-1 overflow-x-auto flex-shrink-0 max-w-[180px]">
               {filterChip && (
                 <button onClick={() => setFilterChip("")}
-                  className="px-1.5 py-1 text-[10px] font-medium rounded bg-slate-200 text-slate-600 hover:bg-slate-300 whitespace-nowrap">
-                  ✕ clear
+                  className="px-1.5 py-1 text-[10px] font-medium rounded bg-zinc-200 text-zinc-600 hover:bg-zinc-300 whitespace-nowrap transition-colors duration-150 ease-out">
+                  <X className="w-3 h-3 inline" /> clear
                 </button>
               )}
               {extensionCounts.slice(0, 6).map(([ext, count]) => (
                 <button key={ext} onClick={() => setFilterChip(filterChip === ext ? "" : ext)}
-                  className={`px-1.5 py-1 text-[10px] font-medium rounded whitespace-nowrap transition-colors ${
+                  className={`px-1.5 py-1 text-[10px] font-medium rounded whitespace-nowrap transition-colors duration-150 ease-out ${
                     filterChip === ext
-                      ? "bg-blue-600 text-white"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      ? "bg-violet-600 text-white"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
                   }`}>
                   .{ext} {count}
                 </button>
@@ -634,7 +630,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
             </div>
           )}
           <select value={effectiveSort} onChange={(e) => setSort(e.target.value)}
-            className="px-2 py-1.5 text-xs border border-slate-300 rounded-lg bg-white text-slate-700">
+            className="px-2 py-1.5 text-xs border border-zinc-300 rounded-lg bg-white text-zinc-700 transition-colors duration-150 ease-out">
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
             <option value="name_asc">A→Z</option>
@@ -642,33 +638,34 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
             <option value="largest">Largest</option>
           </select>
           <button onClick={() => { setTrashOpen(true); setDeleteConfirm(null); }}
-            className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors">🗑️ Trash</button>
+            className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50 transition-colors duration-150 ease-out"><Trash2 className="w-3.5 h-3.5" /> Trash</button>
           <button onClick={handleRefresh}
-            className="px-2.5 py-1.5 text-xs rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors" title="Refresh">⟳</button>
+            className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50 transition-colors duration-150 ease-out" title="Refresh"><RefreshCcw className="w-3.5 h-3.5" /></button>
         </div>
 
         {/* Master-detail columns */}
         <div ref={containerRef} className="flex flex-1 min-h-0">
           {/* Master column */}
-          <div style={{ width: masterWidth, minWidth: SPLIT_MIN, maxWidth: SPLIT_MAX }} className="border-r border-slate-200 flex flex-col flex-shrink-0">
-            <div className="px-3 py-2 text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-100 flex-shrink-0">
+          <div style={{ width: masterWidth, minWidth: SPLIT_MIN, maxWidth: SPLIT_MAX }} className="border-r border-zinc-200 flex flex-col flex-shrink-0">
+            <div className="px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-400 border-b border-zinc-100 flex-shrink-0">
               {filteredFiles.length === active.files.length
                 ? `${active.files.length} file${active.files.length !== 1 ? "s" : ""}`
                 : `${filteredFiles.length} of ${active.files.length} match`}
-              <span className="ml-2 text-slate-300">· sorted {effectiveSort === "name_asc" ? "A→Z" : effectiveSort === "name_desc" ? "Z→A" : effectiveSort === "newest" ? "newest" : effectiveSort === "oldest" ? "oldest" : "largest"}</span>
+              <span className="ml-2 text-zinc-300">· sorted {effectiveSort === "name_asc" ? "A→Z" : effectiveSort === "name_desc" ? "Z→A" : effectiveSort === "newest" ? "newest" : effectiveSort === "oldest" ? "oldest" : "largest"}</span>
             </div>
-            <div ref={listRef} role="listbox" aria-label="File list" className="flex-1 overflow-y-auto divide-y divide-slate-50 group">
+            <div ref={listRef} role="listbox" aria-label="File list" className="flex-1 overflow-y-auto divide-y divide-zinc-50 group">
               {filteredFiles.length === 0 ? (
                 <div className="p-6 text-center">
-                  <div className="text-slate-500 font-medium mb-1">{filter ? "No matching files" : `No ${activeTab} files yet`}</div>
-                  {!filter && <div className="text-xs text-slate-400 mb-3">
+                  <FileText className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
+                  <div className="text-zinc-500 font-medium mb-1">{filter ? "No matching files" : `No ${activeTab} files yet`}</div>
+                  {!filter && <div className="text-xs text-zinc-400 mb-3">
                     {activeTab === "raw" && "Head to the Ingest tab to add files, URLs, or PDFs."}
                     {activeTab === "wiki" && "Compile your raw sources to generate wiki pages."}
-                    {activeTab === "outputs" && "Ask a question or run a health check to generate output."}                    
+                    {activeTab === "outputs" && "Ask a question or run a health check to generate output."}
                   </div>}
                   {!filter && onNavigate && (
                     <button onClick={() => onNavigate(CATEGORY_EMPTY_ACTIONS[activeTab].action)}
-                      className="px-4 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors">
+                      className="px-4 py-2 text-xs font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-500 transition-colors duration-150 ease-out">
                       {CATEGORY_EMPTY_ACTIONS[activeTab].label}
                     </button>
                   )}
@@ -691,7 +688,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
           {/* Draggable divider */}
           <div
             onMouseDown={onDragStart}
-            className="w-1.5 cursor-col-resize bg-transparent hover:bg-blue-400 active:bg-blue-500 flex-shrink-0 transition-colors relative"
+            className="w-1.5 cursor-col-resize bg-transparent hover:bg-violet-400 active:bg-violet-500 flex-shrink-0 transition-colors duration-150 ease-out relative"
             style={{ marginLeft: "-1px" }}
             title="Drag to resize"
           />
@@ -700,11 +697,11 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
           <div className="flex-1 flex flex-col min-w-0">
             {selected ? (
               <>
-                <div className="px-5 py-3 border-b border-slate-200 flex-shrink-0">
+                <div className="px-5 py-3 border-b border-zinc-200 flex-shrink-0">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-slate-900 truncate text-base">{selected.title || selected.name}</h3>
-                      <div className="text-xs text-slate-400 mt-0.5 flex gap-3 flex-wrap">
+                      <h3 className="font-semibold text-zinc-900 truncate text-base tracking-tight">{selected.title || selected.name}</h3>
+                      <div className="text-xs text-zinc-400 mt-0.5 flex gap-3 flex-wrap">
                         <span>{selected.rel}</span>
                         <span>{selected.size_h}</span>
                         <span>{selected.modified_h}</span>
@@ -717,35 +714,35 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
                     <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
                       {content && (activeTab === "wiki" || selected.name.endsWith(".md")) && (
                         <button onClick={() => downloadWikiHtml(selected.title || selected.name, selected.name, content)}
-                          className="text-xs px-2.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors">HTML</button>
+                          className="text-xs px-2.5 py-1 rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 transition-colors duration-150 ease-out">HTML</button>
                       )}
                       <button onClick={handleDownload}
-                        className="text-xs px-2.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors">Download</button>
+                        className="text-xs px-2.5 py-1 rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 transition-colors duration-150 ease-out">Download</button>
                       {content && <button onClick={handleCopyContent}
-                        className="text-xs px-2.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors">Copy</button>}
+                        className="text-xs px-2.5 py-1 rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 transition-colors duration-150 ease-out">Copy</button>}
                       <button onClick={handleCopyPath}
-                        className="text-xs px-2.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors">Path</button>
+                        className="text-xs px-2.5 py-1 rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 transition-colors duration-150 ease-out">Path</button>
                       {content && !(activeTab === "wiki" || selected.name.endsWith(".md")) && (
                         <button onClick={() => setWrapCode((w) => !w)}
-                          className={`text-xs px-2.5 py-1 rounded border transition-colors ${
+                          className={`text-xs px-2.5 py-1 rounded border transition-colors duration-150 ease-out ${
                             wrapCode
-                              ? "bg-blue-50 border-blue-300 text-blue-700"
-                              : "border-slate-300 text-slate-600 hover:bg-slate-50"
+                              ? "bg-violet-50 border-violet-300 text-violet-700"
+                              : "border-zinc-300 text-zinc-600 hover:bg-zinc-50"
                           }`}>
                           {wrapCode ? "Wrap" : "No wrap"}
                         </button>
                       )}
                       {activeTab === "outputs" && (
                         <button onClick={handlePromote}
-                          className="text-xs px-2.5 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors">Promote</button>
+                          className="text-xs px-2.5 py-1 rounded bg-violet-600 text-white hover:bg-violet-500 transition-colors duration-150 ease-out">Promote</button>
                       )}
                       {selected.links_to && selected.links_to.length > 0 && (
                         <button onClick={() => setOutboundOpen((o) => !o)}
-                          className="text-xs px-2.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 transition-colors">Links ({selected.links_to.length})</button>
+                          className="text-xs px-2.5 py-1 rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 transition-colors duration-150 ease-out">Links ({selected.links_to.length})</button>
                       )}
                       <div className="relative">
                         <button onClick={() => setDeleteConfirm(selected)}
-                          className="text-xs px-2.5 py-1 rounded bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors">Delete</button>
+                          className="text-xs px-2.5 py-1 rounded bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition-colors duration-150 ease-out">Delete</button>
                         {deleteConfirm?.rel === selected.rel && (
                           <InlineConfirm
                             message={`Move "${selected.title || selected.name}" to trash?`}
@@ -760,7 +757,14 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
                 <div className="flex flex-1 min-h-0">
                   <div className="flex-1 overflow-y-auto">
                     {contentLoading ? (
-                      <div className="p-4 text-sm text-slate-400">Loading preview…</div>
+                      <div className="p-4 space-y-2">
+                        {/* Skeleton loader for content */}
+                        <div className="h-3 bg-zinc-200 rounded animate-pulse w-3/4" />
+                        <div className="h-3 bg-zinc-200 rounded animate-pulse w-full" />
+                        <div className="h-3 bg-zinc-200 rounded animate-pulse w-5/6" />
+                        <div className="h-3 bg-zinc-200 rounded animate-pulse w-2/3" />
+                        <div className="h-3 bg-zinc-200 rounded animate-pulse w-full" />
+                      </div>
                     ) : displayContent ? (
                       <>
                         {truncationBanner && (
@@ -769,7 +773,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
                           </div>
                         )}
                         {activeTab === "wiki" || selected.name.endsWith(".md") ? (
-                          <div className="prose prose-slate prose-sm max-w-none p-4 max-h-full overflow-visible">
+                          <div className="prose prose-zinc prose-sm max-w-none p-4 max-h-full overflow-visible">
                             <ReactMarkdown
                               remarkPlugins={[remarkGfm]}
                               components={{
@@ -791,7 +795,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
                                             handleSelect(target);
                                           }
                                         }}
-                                        className={target ? "" : "text-slate-400 cursor-default"}
+                                        className={target ? "" : "text-zinc-400 cursor-default"}
                                         title={target ? "" : "No matching page in wiki"}
                                       >
                                         {children}
@@ -810,21 +814,21 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
                             </ReactMarkdown>
                           </div>
                         ) : (
-                          <pre className={`text-xs text-slate-600 p-4 ${wrapCode ? "whitespace-pre-wrap" : "whitespace-pre overflow-x-auto"}`}>
+                          <pre className={`text-xs text-zinc-600 p-4 ${wrapCode ? "whitespace-pre-wrap" : "whitespace-pre overflow-x-auto"}`}>
                             {displayContent}
                           </pre>
                         )}
                       </>
                     ) : selected && isPreviewable(selected.name) ? (
-                      <div className="p-4 text-sm text-slate-400">Could not load preview</div>
+                      <div className="p-4 text-sm text-zinc-400">Could not load preview</div>
                     ) : selected ? (
-                      <div className="p-4 text-sm text-slate-400 flex items-center gap-3">
-                        <span className="text-2xl">{getEmoji(selected.name)}</span>
+                      <div className="p-4 text-sm text-zinc-400 flex items-center gap-3">
+                        <FileText className="w-6 h-6 text-zinc-300 flex-shrink-0" />
                         <div>
-                          <div className="font-medium text-slate-600">Binary file — preview not available</div>
-                          <div className="text-xs text-slate-400 mt-1">{selected.size_h} · {selected.name}</div>
+                          <div className="font-medium text-zinc-600">Binary file — preview not available</div>
+                          <div className="text-xs text-zinc-400 mt-1">{selected.size_h} · {selected.name}</div>
                           <button onClick={handleDownload}
-                            className="mt-2 px-3 py-1.5 text-xs font-medium rounded bg-blue-600 text-white hover:bg-blue-700">
+                            className="mt-2 px-3 py-1.5 text-xs font-medium rounded bg-violet-600 text-white hover:bg-violet-500 transition-colors duration-150 ease-out">
                             Download
                           </button>
                         </div>
@@ -847,8 +851,8 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
             ) : (
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
-                  <div className="text-4xl mb-2">📂</div>
-                  <div className="text-sm text-slate-400">Select a file to preview</div>
+                  <FolderOpen className="w-10 h-10 text-zinc-300 mx-auto mb-2" />
+                  <div className="text-sm text-zinc-400">Select a file to preview</div>
                 </div>
               </div>
             )}
@@ -866,9 +870,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
                 ? "bg-red-600 text-white"
                 : toast.type === "success"
                 ? "bg-green-600 text-white"
-                : toast.type === "undo"
-                ? "bg-slate-800 text-white"
-                : "bg-slate-800 text-white"
+                : "bg-zinc-800 text-white"
             }`}
             role={toast.type === "undo" ? "alert" : "status"}
             aria-live={toast.type === "undo" ? "assertive" : "polite"}
@@ -880,7 +882,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
                   toast.undoAction!();
                   dismissToast(toast.id);
                 }}
-                className="text-xs font-semibold uppercase tracking-wide text-blue-300 hover:text-blue-200 whitespace-nowrap"
+                className="text-xs font-semibold uppercase tracking-wide text-violet-300 hover:text-violet-200 whitespace-nowrap"
               >
                 {toast.undoLabel || "Undo"}
               </button>
@@ -889,9 +891,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
               onClick={() => dismissToast(toast.id)}
               className="text-white/60 hover:text-white text-xs"
               aria-label="Dismiss"
-            >
-              ✕
-            </button>
+            ><X className="w-3 h-3" /></button>
           </div>
         ))}
       </div>

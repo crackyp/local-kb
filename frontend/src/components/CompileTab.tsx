@@ -52,12 +52,12 @@ export function CompileTab() {
 
   return (
     <div className="space-y-6">
-      <SectionCard title="Compile Wiki">
+      <SectionCard title="Compile Wiki" description="Generate wiki pages from raw sources using the LLM.">
         <div className="grid grid-cols-3 gap-4 mb-4">
           <ModelSelect value={model} />
           <div>
-            <label className="text-xs text-slate-500">Max source chars</label>
-            <select value={maxChars} onChange={(e) => setMaxChars(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 border rounded-lg text-sm bg-white">
+            <label className="text-xs text-zinc-500">Max source chars</label>
+            <select value={maxChars} onChange={(e) => setMaxChars(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 border border-zinc-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors duration-150 ease-out">
               <option value={32000}>32K</option>
               <option value={55000}>55K</option>
               <option value={100000}>100K</option>
@@ -73,20 +73,22 @@ export function CompileTab() {
             </label>
           </div>
         </div>
-        <ActionButton onClick={handleCompile} loading={compiling} loadingText="Compiling...">
-          Run Compile
-        </ActionButton>
-        {compiling && (
-          <button
-            onClick={stopCompile}
-            className="ml-3 px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700"
-          >
-            Stop Compile
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <ActionButton onClick={handleCompile} loading={compiling} loadingText="Compiling...">
+            Run Compile
+          </ActionButton>
+          {compiling && (
+            <button
+              onClick={stopCompile}
+              className="ml-3 px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors duration-150 ease-out"
+            >
+              Stop Compile
+            </button>
+          )}
+        </div>
       </SectionCard>
 
-      <SectionCard title="FAISS Index">
+      <SectionCard title="FAISS Index" description="Build or rebuild the vector search index.">
         <div className="flex items-center gap-4 mb-4">
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={idxForce} onChange={(e) => setIdxForce(e.target.checked)} className="rounded" />
@@ -99,11 +101,11 @@ export function CompileTab() {
       </SectionCard>
 
       {compiling && liveLines.length > 0 && (
-        <div className="bg-slate-800 rounded-xl p-4">
+        <div className="bg-zinc-800 rounded-xl p-4 transition-colors duration-150 ease-out">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-blue-400 text-sm animate-pulse">Compiling...</span>
+            <span className="text-violet-400 text-sm animate-pulse">Compiling...</span>
           </div>
-          <pre ref={liveRef} className="text-xs text-slate-300 overflow-auto max-h-64">{liveLines.join("\n")}</pre>
+          <pre ref={liveRef} className="text-xs text-zinc-300 overflow-auto max-h-64">{liveLines.join("\n")}</pre>
         </div>
       )}
 

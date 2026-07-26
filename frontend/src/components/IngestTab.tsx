@@ -5,13 +5,14 @@ import { api } from "@/lib/api";
 import { useStatus } from "@/lib/StatusContext";
 import type { CommandResponse } from "@/types";
 import { CommandResultPanel, ActionButton } from "@/components/shared";
+import { Upload, Globe, FileText } from "lucide-react";
 
 type IngestMode = "files" | "url" | "pdf";
 
-const SUB_TABS: { id: IngestMode; label: string }[] = [
-  { id: "files", label: "Files" },
-  { id: "url", label: "URL" },
-  { id: "pdf", label: "PDF" },
+const SUB_TABS: { id: IngestMode; label: string; icon: string }[] = [
+  { id: "files", label: "Files", icon: "Upload" },
+  { id: "url", label: "URL", icon: "Globe" },
+  { id: "pdf", label: "PDF", icon: "FileText" },
 ];
 
 export function IngestTab() {
@@ -116,17 +117,17 @@ export function IngestTab() {
     try {
       const { promise } = api.ingestUrlStream(
         {
-        urls: lines,
-        crawl,
-        max_depth: maxDepth,
-        max_pages: maxPages,
-        same_domain: sameDomain,
-        path_filter: pathFilter.trim() || null,
-        respect_robots: respectRobots,
-        delay: crawlDelay,
-        download_images: downloadImages,
-        max_images: maxImages,
-        timeout: urlTimeout,
+          urls: lines,
+          crawl,
+          max_depth: maxDepth,
+          max_pages: maxPages,
+          same_domain: sameDomain,
+          path_filter: pathFilter.trim() || null,
+          respect_robots: respectRobots,
+          delay: crawlDelay,
+          download_images: downloadImages,
+          max_images: maxImages,
+          timeout: urlTimeout,
         },
         (line) => setLiveLines((prev) => [...prev, line]),
       );
@@ -153,22 +154,25 @@ export function IngestTab() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Ingest</h1>
-        <p className="text-sm text-slate-500 mt-1">Add source material to your knowledge base</p>
+        <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Ingest</h1>
+        <p className="text-sm text-zinc-500 mt-1">Add source material to your knowledge base</p>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="flex border-b border-slate-200">
+      <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden transition-colors duration-150 ease-out">
+        <div className="flex border-b border-zinc-200">
           {SUB_TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => { setMode(tab.id); setResult(null); }}
-              className={`px-5 py-3 text-sm font-medium transition-colors ${
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors duration-150 ease-out ${
                 mode === tab.id
-                  ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50"
-                  : "text-slate-500 hover:text-slate-700"
+                  ? "text-violet-600 border-b-2 border-violet-600 bg-violet-50"
+                  : "text-zinc-500 hover:text-zinc-700"
               }`}
             >
+              {tab.id === "files" && <Upload className="w-4 h-4" />}
+              {tab.id === "url" && <Globe className="w-4 h-4" />}
+              {tab.id === "pdf" && <FileText className="w-4 h-4" />}
               {tab.label}
             </button>
           ))}
@@ -181,12 +185,13 @@ export function IngestTab() {
                 onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-                  dragging ? "border-blue-500 bg-blue-50" : "border-slate-300 hover:border-blue-400"
+                className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors duration-150 ease-out ${
+                  dragging ? "border-violet-500 bg-violet-50" : "border-zinc-300 hover:border-violet-400"
                 }`}
               >
-                <div className="text-base font-medium text-slate-700 mb-1">Drop files here or click to upload</div>
-                <div className="text-sm text-slate-500">Supports any file type</div>
+                <Upload className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
+                <div className="text-base font-medium text-zinc-700 mb-1">Drop files here or click to upload</div>
+                <div className="text-sm text-zinc-500">Supports any file type</div>
                 <input
                   type="file"
                   multiple
@@ -197,20 +202,20 @@ export function IngestTab() {
                     e.target.value = "";
                   }}
                 />
-                <label htmlFor="file-upload" className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 cursor-pointer">
+                <label htmlFor="file-upload" className="mt-4 inline-block px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-500 cursor-pointer transition-colors duration-150 ease-out">
                   Choose Files
                 </label>
               </div>
               {uploadFiles.length > 0 && (
                 <div className="space-y-2">
-                  <div className="text-sm font-medium text-slate-700">Selected ({uploadFiles.length})</div>
+                  <div className="text-sm font-medium text-zinc-700">Selected ({uploadFiles.length})</div>
                   <div className="space-y-1 max-h-32 overflow-y-auto">
                     {uploadFiles.map((f, i) => (
-                      <div key={f.name + i} className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-2 py-1.5 rounded">
+                      <div key={f.name + i} className="flex items-center justify-between text-xs text-zinc-600 bg-zinc-50 px-2 py-1.5 rounded transition-colors duration-150 ease-out">
                         <span>{f.name} ({(f.size / 1024).toFixed(1)} KB)</span>
                         <button
                           onClick={() => removeFile(i)}
-                          className="text-red-500 hover:text-red-700 px-1.5 py-0.5 rounded hover:bg-red-50"
+                          className="text-red-500 hover:text-red-700 px-1.5 py-0.5 rounded hover:bg-red-50 transition-colors duration-150 ease-out"
                         >
                           Remove
                         </button>
@@ -223,7 +228,7 @@ export function IngestTab() {
                 </div>
               )}
               <div>
-                <label className="text-sm font-medium text-slate-700">Or ingest by path / glob</label>
+                <label className="text-sm font-medium text-zinc-700">Or ingest by path / glob</label>
                 <textarea
                   value={paths}
                   onChange={(e) => setPaths(e.target.value)}
@@ -234,8 +239,8 @@ export function IngestTab() {
                       setPaths((prev) => (prev ? prev + "\n" + text.trim() : text.trim()));
                     }
                   }}
-                  placeholder="/Users/you/Research/*.md&#10;/Users/you/Research/*.txt"
-                  className="mt-2 w-full h-28 px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="/Users/you/Research/*.md\n/Users/you/Research/*.txt"
+                  className="mt-2 w-full h-28 px-3 py-2 border border-zinc-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors duration-150 ease-out"
                 />
                 <div className="mt-2">
                   <ActionButton onClick={handleIngestPath} loading={loading} disabled={!paths.trim()} loadingText="Ingesting...">
@@ -251,8 +256,8 @@ export function IngestTab() {
               <textarea
                 value={urls}
                 onChange={(e) => setUrls(e.target.value)}
-                placeholder="https://example.com&#10;https://arxiv.org/abs/..."
-                className="w-full h-28 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="https://example.com\nhttps://arxiv.org/abs/..."
+                className="w-full h-28 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors duration-150 ease-out"
               />
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <label className="flex items-center gap-2">
@@ -264,35 +269,35 @@ export function IngestTab() {
                   <span className="text-sm">Download images</span>
                 </label>
                 <div>
-                  <label className="text-xs text-slate-500">Max images</label>
-                  <input type="number" min={1} max={200} value={maxImages} onChange={(e) => setMaxImages(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm" />
+                  <label className="text-xs text-zinc-500">Max images</label>
+                  <input type="number" min={1} max={200} value={maxImages} onChange={(e) => setMaxImages(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm bg-white" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-500">Timeout (sec)</label>
-                  <input type="number" min={5} max={300} value={urlTimeout} onChange={(e) => setUrlTimeout(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm" />
+                  <label className="text-xs text-zinc-500">Timeout (sec)</label>
+                  <input type="number" min={5} max={300} value={urlTimeout} onChange={(e) => setUrlTimeout(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm bg-white" />
                 </div>
               </div>
               {crawl && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 space-y-4 transition-colors duration-150 ease-out">
                   <div>
-                    <div className="text-sm font-medium text-slate-800">Crawler controls</div>
-                    <div className="text-xs text-slate-500 mt-1">Breadth-first crawl with safety caps. Depth 0 means only the starting page.</div>
+                    <div className="text-sm font-medium text-zinc-800">Crawler controls</div>
+                    <div className="text-xs text-zinc-500 mt-1">Breadth-first crawl with safety caps. Depth 0 means only the starting page.</div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                     <div>
-                      <label className="text-xs text-slate-500">Max depth</label>
+                      <label className="text-xs text-zinc-500">Max depth</label>
                       <input type="number" min={0} max={20} value={maxDepth} onChange={(e) => setMaxDepth(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm bg-white" />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-500">Max pages</label>
+                      <label className="text-xs text-zinc-500">Max pages</label>
                       <input type="number" min={1} max={5000} value={maxPages} onChange={(e) => setMaxPages(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm bg-white" />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-500">Delay (sec)</label>
+                      <label className="text-xs text-zinc-500">Delay (sec)</label>
                       <input type="number" min={0} max={60} step={0.1} value={crawlDelay} onChange={(e) => setCrawlDelay(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm bg-white" />
                     </div>
                     <div>
-                      <label className="text-xs text-slate-500">Path filter regex</label>
+                      <label className="text-xs text-zinc-500">Path filter regex</label>
                       <input type="text" value={pathFilter} onChange={(e) => setPathFilter(e.target.value)} placeholder="^/docs/|^/blog/" className="w-full mt-1 px-2 py-1 border rounded text-sm bg-white" />
                     </div>
                   </div>
@@ -316,20 +321,21 @@ export function IngestTab() {
 
           {mode === "pdf" && (
             <div className="space-y-4">
-              <div className="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors">
-                <div className="text-base font-medium text-slate-700 mb-1">Drop PDF files here</div>
-                <div className="text-sm text-slate-500">Extracts text into markdown files</div>
+              <div className="border-2 border-dashed border-zinc-300 rounded-xl p-8 text-center hover:border-violet-400 transition-colors duration-150 ease-out">
+                <FileText className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
+                <div className="text-base font-medium text-zinc-700 mb-1">Drop PDF files here</div>
+                <div className="text-sm text-zinc-500">Extracts text into markdown files</div>
                 <input type="file" accept=".pdf" multiple onChange={(e) => setPdfFiles(Array.from(e.target.files || []))} className="hidden" id="pdf-upload" />
-                <label htmlFor="pdf-upload" className="mt-4 inline-block px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 cursor-pointer">
+                <label htmlFor="pdf-upload" className="mt-4 inline-block px-4 py-2 bg-violet-600 text-white rounded-lg text-sm font-medium hover:bg-violet-500 cursor-pointer transition-colors duration-150 ease-out">
                   Choose PDFs
                 </label>
               </div>
               {pdfFiles.length > 0 && (
                 <div>
-                  <div className="text-sm font-medium text-slate-700 mb-2">Selected ({pdfFiles.length})</div>
+                  <div className="text-sm font-medium text-zinc-700 mb-2">Selected ({pdfFiles.length})</div>
                   <div className="space-y-1 max-h-32 overflow-y-auto">
                     {pdfFiles.map((f) => (
-                      <div key={f.name} className="text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded">
+                      <div key={f.name} className="text-xs text-zinc-600 bg-zinc-50 px-2 py-1 rounded transition-colors duration-150 ease-out">
                         {f.name} ({(f.size / 1024).toFixed(1)} KB)
                       </div>
                     ))}
@@ -338,7 +344,7 @@ export function IngestTab() {
               )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs text-slate-500">Max pages (0 = all)</label>
+                  <label className="text-xs text-zinc-500">Max pages (0 = all)</label>
                   <input type="number" min={0} max={5000} value={pdfMaxPages} onChange={(e) => setPdfMaxPages(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm" />
                 </div>
                 <label className="flex items-center gap-2 pt-5">
@@ -355,13 +361,13 @@ export function IngestTab() {
       </div>
 
       {urlFetching && liveLines.length > 0 && (
-        <div className="bg-slate-800 rounded-xl p-4">
+        <div className="bg-zinc-800 rounded-xl p-4 transition-colors duration-150 ease-out">
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-blue-400 text-sm animate-pulse">
+            <span className="text-violet-400 text-sm animate-pulse">
               {crawl ? "Fetching and crawling..." : "Fetching..."}
             </span>
           </div>
-          <pre ref={liveRef} className="text-xs text-slate-300 overflow-auto max-h-64">{liveLines.join("\n")}</pre>
+          <pre ref={liveRef} className="text-xs text-zinc-300 overflow-auto max-h-64">{liveLines.join("\n")}</pre>
         </div>
       )}
 
