@@ -88,7 +88,9 @@ def get_status() -> dict:
         faiss = "unavailable"
 
     return {
-        "llamacpp": {"running": llamacpp_is_running(), "models": models, "loaded": loaded, "default_model": CFG["model"]["default"]},
+        # Derived from `providers` rather than a second ping_any(): that call
+        # re-ran is_alive() on every provider, doubling the probes per poll.
+        "llamacpp": {"running": any(p["running"] for p in providers), "models": models, "loaded": loaded, "default_model": CFG["model"]["default"]},
         "providers": providers,
         "files": {
             "raw": _count_files(RAW, exclude=[RAW_ASSETS]),
