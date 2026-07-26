@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "@/lib/api";
 import type { FileMeta } from "@/types";
 
@@ -42,14 +42,17 @@ export function useCommandAction<TResult, TArgs extends unknown[] = []>(
 export function useFileList(category: "raw" | "wiki" | "outputs") {
   const [files, setFiles] = useState<FileMeta[]>([]);
   const [count, setCount] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       const res = await api.listFiles(category);
       setFiles(res.files);
       setCount(res.count);
+      setError(null);
     } catch (e) {
       console.error(`Failed to list ${category}:`, e);
+      setError(e instanceof Error ? e.message : String(e));
     }
   }, [category]);
 
@@ -63,5 +66,10 @@ export function useFileList(category: "raw" | "wiki" | "outputs") {
     setCount((c) => Math.max(0, c - 1));
   }, []);
 
-  return { files, count, refresh, removeLocal };
+  // Stable identity: callers put this object in dependency arrays, so returning a
+  // fresh literal each render turns any such effect into a render loop.
+  return useMemo(
+    () => ({ files, count, error, refresh, removeLocal }),
+    [files, count, error, refresh, removeLocal],
+  );
 }

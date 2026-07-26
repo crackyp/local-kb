@@ -8,15 +8,19 @@ import type { FileMeta, TrashItem, View } from "@/types";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { downloadWikiHtml } from "@/lib/exportHtml";
+import { WikiGraph } from "@/components/WikiGraph";
 import {
   FileText,
   Trash2,
   RefreshCcw,
   X,
   FolderOpen,
+  Network,
+  List,
 } from "lucide-react";
 
 type Category = "raw" | "wiki" | "outputs";
+type WikiView = "graph" | "list";
 const CATEGORIES: Category[] = ["wiki", "raw", "outputs"];
 const CATEGORY_LABELS: Record<Category, string> = { wiki: "Wiki", raw: "Raw", outputs: "Outputs" };
 const CATEGORY_EMPTY_ACTIONS: Record<Category, { action: View; label: string }> = {
@@ -255,12 +259,28 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
   // ── Phase 3: Filter chips ────────────────────────────────
   const [filterChip, setFilterChip] = useState<string>("");
 
+  // ── Wiki graph view (default) vs. flat list ───────────────
+  const [wikiView, setWikiView] = useState<WikiView>("graph");
+  // Load saved preference after mount to avoid hydration mismatch
+  useEffect(() => {
+    if (typeof window !== "undefined" && localStorage.getItem("explorer-wikiView") === "list")
+      setWikiView("list");
+  }, []);
+  useEffect(() => { localStorage.setItem("explorer-wikiView", wikiView); }, [wikiView]);
+
+  const graphMode = activeTab === "wiki" && wikiView === "graph";
+
   // ── Resizable split pane ──────────────────────────────────
   const SPLIT_MIN = 240;
   const SPLIT_MAX = 600;
   const SPLIT_DEFAULT = 340;
+  // Graph mode's preview overlays the canvas, so its width is measured from the right.
+  const PREVIEW_MIN = 320;
+  const PREVIEW_MAX = 900;
+  const PREVIEW_DEFAULT = 520;
   const [masterWidth, setMasterWidth] = useState<number>(SPLIT_DEFAULT);
-  // Load saved width after mount to avoid hydration mismatch
+  const [previewWidth, setPreviewWidth] = useState<number>(PREVIEW_DEFAULT);
+  // Load saved widths after mount to avoid hydration mismatch
   useEffect(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("explorer-masterWidth");
@@ -268,29 +288,39 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
         const n = parseInt(saved, 10);
         if (!isNaN(n)) setMasterWidth(Math.max(SPLIT_MIN, Math.min(SPLIT_MAX, n)));
       }
+      const savedPreview = localStorage.getItem("explorer-previewWidth");
+      if (savedPreview) {
+        const n = parseInt(savedPreview, 10);
+        if (!isNaN(n)) setPreviewWidth(Math.max(PREVIEW_MIN, Math.min(PREVIEW_MAX, n)));
+      }
     }
   }, []);
-  const dragging = useRef(false);
+  const dragging = useRef<"master" | "preview" | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const onDragStart = useCallback((e: React.MouseEvent) => {
+  const startDrag = useCallback((target: "master" | "preview") => (e: React.MouseEvent) => {
     e.preventDefault();
-    dragging.current = true;
+    dragging.current = target;
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   }, []);
 
   useEffect(() => {
     const onMouseMove = (e: MouseEvent) => {
-      if (!dragging.current || !containerRef.current) return;
+      const target = dragging.current;
+      if (!target || !containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      let w = e.clientX - rect.left;
-      w = Math.max(SPLIT_MIN, Math.min(SPLIT_MAX, w));
-      setMasterWidth(w);
+      if (target === "master") {
+        setMasterWidth(Math.max(SPLIT_MIN, Math.min(SPLIT_MAX, e.clientX - rect.left)));
+      } else {
+        // Always leave a usable strip of canvas beside the preview.
+        const max = Math.max(PREVIEW_MIN, Math.min(PREVIEW_MAX, rect.width - 260));
+        setPreviewWidth(Math.max(PREVIEW_MIN, Math.min(max, rect.right - e.clientX)));
+      }
     };
     const onMouseUp = () => {
       if (dragging.current) {
-        dragging.current = false;
+        dragging.current = null;
         document.body.style.cursor = "";
         document.body.style.userSelect = "";
       }
@@ -322,7 +352,8 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }, [active.files]);
 
-  useEffect(() => { CATEGORIES.forEach((cat) => lists[cat].refresh()); }, [lists]);
+  // No mount-refresh here: each useFileList already fetches on mount. Refreshing
+  // off `lists` re-ran on every render (new object identity) and spun the API.
   useEffect(() => { if (wiki.files.length > 0) setWikiFiles(wiki.files); }, [wiki.files]);
 
   // ── Phase 3: URL sync ─────────────────────────────────────
@@ -353,6 +384,10 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
     if (typeof window !== "undefined")
       localStorage.setItem("explorer-masterWidth", String(masterWidth));
   }, [masterWidth]);
+  useEffect(() => {
+    if (typeof window !== "undefined")
+      localStorage.setItem("explorer-previewWidth", String(previewWidth));
+  }, [previewWidth]);
 
   const effectiveSort = sort || (activeTab === "wiki" ? "name_asc" : "newest");
 
@@ -445,10 +480,23 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
     } catch (e) { console.error(e); addToast(`Failed to delete: ${e}`, "error"); }
   }, [activeTab, selected, active, refreshStatus, addToast]);
 
+  const clearSelection = useCallback(() => {
+    setSelected(null); setContent(null); setOutboundOpen(false);
+  }, []);
+
+  // Lets the graph know how much of its right edge the preview overlay covers.
+  const previewRef = useRef<HTMLDivElement>(null);
+  const getInsetRight = useCallback(
+    () => (graphMode && selected ? previewRef.current?.offsetWidth ?? 0 : 0),
+    [graphMode, selected],
+  );
+
   const handleRefresh = useCallback(() => { active.refresh(); refreshStatus(); }, [active, refreshStatus]);
   const switchTab = useCallback((tab: Category) => {
     setActiveTab(tab); setSelected(null); setContent(null); setDeleteConfirm(null);
-    setFocusIndex(-1); setSort(""); lists[tab].refresh();
+    // Extension chips are per-tab; carrying one over can filter the new tab to
+    // nothing while its chip row is hidden, leaving no way to clear it.
+    setFocusIndex(-1); setSort(""); setFilterChip(""); lists[tab].refresh();
   }, [lists]);
 
   const handleDownload = useCallback(() => {
@@ -492,6 +540,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
       if (e.key === "1") { switchTab("wiki"); return; }
       if (e.key === "2") { switchTab("raw"); return; }
       if (e.key === "3") { switchTab("outputs"); return; }
+      if (graphMode) return; // list-row navigation is meaningless on the canvas
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         if (flatList.length === 0) return;
@@ -512,7 +561,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [filter, deleteConfirm, trashOpen, focusIndex, flatList, switchTab, handleSelect]);
+  }, [filter, deleteConfirm, trashOpen, focusIndex, flatList, switchTab, handleSelect, graphMode]);
 
   useEffect(() => {
     if (focusIndex >= flatList.length) setFocusIndex(flatList.length > 0 ? 0 : -1);
@@ -589,64 +638,111 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
   return (
     <>
       <div className="flex flex-col h-[calc(100vh-8rem)] bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden transition-colors duration-150 ease-out">
-        {/* Command bar */}
-        <div className="flex items-center gap-3 px-4 py-2.5 border-b border-zinc-200 bg-white flex-shrink-0">
-          <div className="flex bg-zinc-100 rounded-lg p-0.5">
+        {/* Command bar. Every control is h-8 so the row shares one baseline; groups are
+            separated by gap-3, items within a group by gap-2. */}
+        <div className="flex items-center gap-3 px-4 py-2 border-b border-zinc-200 bg-white flex-shrink-0">
+          <div className="flex items-center gap-0.5 bg-zinc-100 rounded-lg p-0.5">
             {CATEGORIES.map((tab) => (
               <button key={tab} onClick={() => switchTab(tab)}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors duration-150 ease-out capitalize ${
+                className={`h-7 px-3 inline-flex items-center gap-1.5 text-xs font-medium rounded-md transition-colors duration-150 ease-out ${
                   activeTab === tab ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
                 }`}>
-                {CATEGORY_LABELS[tab]} ({lists[tab].count})
+                {CATEGORY_LABELS[tab]}
+                <span className={`tabular-nums ${activeTab === tab ? "text-zinc-400" : "text-zinc-400/80"}`}>
+                  {lists[tab].count}
+                </span>
               </button>
             ))}
           </div>
-          <div className="relative flex-1 max-w-xs">
-            <input ref={filterRef} type="text" value={filter}
-              onChange={(e) => { setFilter(e.target.value); setFocusIndex(-1); }}
-              placeholder="Filter…  (/)"
-              className="w-full px-3 py-1.5 text-xs border border-zinc-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 bg-white transition-colors duration-150 ease-out" />
-            {filter && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-zinc-400">{filteredFiles.length} of {active.files.length}</span>}
-          </div>
-          {/* Phase 3: Filter chips */}
-          {extensionCounts.length > 0 && !filter && (
-            <div className="flex gap-1 overflow-x-auto flex-shrink-0 max-w-[180px]">
-              {filterChip && (
-                <button onClick={() => setFilterChip("")}
-                  className="px-1.5 py-1 text-[10px] font-medium rounded bg-zinc-200 text-zinc-600 hover:bg-zinc-300 whitespace-nowrap transition-colors duration-150 ease-out">
-                  <X className="w-3 h-3 inline" /> clear
-                </button>
-              )}
-              {extensionCounts.slice(0, 6).map(([ext, count]) => (
-                <button key={ext} onClick={() => setFilterChip(filterChip === ext ? "" : ext)}
-                  className={`px-1.5 py-1 text-[10px] font-medium rounded whitespace-nowrap transition-colors duration-150 ease-out ${
-                    filterChip === ext
-                      ? "bg-violet-600 text-white"
-                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+          {activeTab === "wiki" && (
+            <div className="flex items-center gap-0.5 bg-zinc-100 rounded-lg p-0.5 flex-shrink-0">
+              {([
+                { mode: "graph" as const, icon: Network, label: "Graph view" },
+                { mode: "list" as const, icon: List, label: "List view" },
+              ]).map(({ mode, icon: Icon, label }) => (
+                <button key={mode} onClick={() => setWikiView(mode)}
+                  aria-pressed={wikiView === mode} title={label} aria-label={label}
+                  className={`h-7 w-7 inline-flex items-center justify-center rounded-md transition-colors duration-150 ease-out ${
+                    wikiView === mode ? "bg-white text-zinc-900 shadow-sm" : "text-zinc-500 hover:text-zinc-700"
                   }`}>
-                  .{ext} {count}
+                  <Icon className="w-3.5 h-3.5" />
                 </button>
               ))}
             </div>
           )}
-          <select value={effectiveSort} onChange={(e) => setSort(e.target.value)}
-            className="px-2 py-1.5 text-xs border border-zinc-300 rounded-lg bg-white text-zinc-700 transition-colors duration-150 ease-out">
-            <option value="newest">Newest</option>
-            <option value="oldest">Oldest</option>
-            <option value="name_asc">A→Z</option>
-            <option value="name_desc">Z→A</option>
-            <option value="largest">Largest</option>
-          </select>
-          <button onClick={() => { setTrashOpen(true); setDeleteConfirm(null); }}
-            className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50 transition-colors duration-150 ease-out"><Trash2 className="w-3.5 h-3.5" /> Trash</button>
-          <button onClick={handleRefresh}
-            className="px-2.5 py-1.5 text-xs rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50 transition-colors duration-150 ease-out" title="Refresh"><RefreshCcw className="w-3.5 h-3.5" /></button>
+          <div className="relative w-64 flex-shrink-0">
+            <input ref={filterRef} type="text" value={filter}
+              onChange={(e) => { setFilter(e.target.value); setFocusIndex(-1); }}
+              placeholder="Filter…  (/)"
+              className={`w-full h-8 pl-3 ${filter ? "pr-20" : "pr-3"} text-xs border border-zinc-300 rounded-lg focus:ring-2 focus:ring-violet-500 focus:border-violet-500 bg-white transition-colors duration-150 ease-out`} />
+            {filter && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] tabular-nums text-zinc-400 pointer-events-none">{filteredFiles.length} of {active.files.length}</span>}
+          </div>
+          {/* Phase 3: Filter chips — only when there's more than one extension to pick
+              between (the Wiki tab is all .md, so a lone ".md 67" chip filters nothing). */}
+          {extensionCounts.length > 1 && !filter && (
+            <div className="flex items-center gap-1 overflow-x-auto flex-1 min-w-0">
+              {filterChip && (
+                <button onClick={() => setFilterChip("")}
+                  className="h-6 px-2 inline-flex items-center gap-1 text-[10px] font-medium rounded-md bg-zinc-200 text-zinc-600 hover:bg-zinc-300 whitespace-nowrap flex-shrink-0 transition-colors duration-150 ease-out">
+                  <X className="w-3 h-3" /> clear
+                </button>
+              )}
+              {extensionCounts.slice(0, 6).map(([ext, count]) => (
+                <button key={ext} onClick={() => setFilterChip(filterChip === ext ? "" : ext)}
+                  className={`h-6 px-2 inline-flex items-center gap-1 text-[10px] font-medium rounded-md whitespace-nowrap flex-shrink-0 transition-colors duration-150 ease-out ${
+                    filterChip === ext
+                      ? "bg-violet-600 text-white"
+                      : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+                  }`}>
+                  .{ext}
+                  <span className={`tabular-nums ${filterChip === ext ? "text-white/70" : "text-zinc-400"}`}>{count}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+            {!graphMode && (
+              <select value={effectiveSort} onChange={(e) => setSort(e.target.value)}
+                className="h-8 pl-2 pr-1 text-xs border border-zinc-300 rounded-lg bg-white text-zinc-700 hover:bg-zinc-50 transition-colors duration-150 ease-out">
+                <option value="newest">Newest</option>
+                <option value="oldest">Oldest</option>
+                <option value="name_asc">A→Z</option>
+                <option value="name_desc">Z→A</option>
+                <option value="largest">Largest</option>
+              </select>
+            )}
+            <div className="w-px h-5 bg-zinc-200" aria-hidden="true" />
+            <button onClick={() => { setTrashOpen(true); setDeleteConfirm(null); }}
+              className="h-8 px-3 inline-flex items-center gap-1.5 text-xs font-medium rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-800 transition-colors duration-150 ease-out">
+              <Trash2 className="w-3.5 h-3.5" />
+              Trash
+            </button>
+            <button onClick={handleRefresh} title="Refresh" aria-label="Refresh"
+              className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-zinc-300 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-800 transition-colors duration-150 ease-out">
+              <RefreshCcw className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
 
-        {/* Master-detail columns */}
-        <div ref={containerRef} className="flex flex-1 min-h-0">
+        {/* Master-detail. In graph mode the canvas is full-bleed and the preview overlays it. */}
+        <div ref={containerRef} className={`flex flex-1 min-h-0 ${graphMode ? "relative" : ""}`}>
+          {graphMode ? (
+            <WikiGraph
+              files={active.files}
+              selectedRel={selected?.rel ?? null}
+              filter={filter}
+              onSelect={handleSelect}
+              onDeselect={clearSelection}
+              getInsetRight={getInsetRight}
+              loadError={active.error}
+            />
+          ) : (
+          <>
           {/* Master column */}
-          <div style={{ width: masterWidth, minWidth: SPLIT_MIN, maxWidth: SPLIT_MAX }} className="border-r border-zinc-200 flex flex-col flex-shrink-0">
+          <div
+            style={{ width: masterWidth, minWidth: SPLIT_MIN, maxWidth: SPLIT_MAX }}
+            className="border-r border-zinc-200 flex flex-col flex-shrink-0">
             <div className="px-3 py-2 text-[10px] uppercase tracking-wider text-zinc-400 border-b border-zinc-100 flex-shrink-0">
               {filteredFiles.length === active.files.length
                 ? `${active.files.length} file${active.files.length !== 1 ? "s" : ""}`
@@ -657,13 +753,26 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
               {filteredFiles.length === 0 ? (
                 <div className="p-6 text-center">
                   <FileText className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
+                  {active.error && !filter ? (
+                    <>
+                      <div className="text-red-600 font-medium mb-1">Couldn&apos;t load {activeTab} files</div>
+                      <div className="text-xs text-zinc-500 break-words mb-3">{active.error}</div>
+                    </>
+                  ) : (
                   <div className="text-zinc-500 font-medium mb-1">{filter ? "No matching files" : `No ${activeTab} files yet`}</div>
-                  {!filter && <div className="text-xs text-zinc-400 mb-3">
+                  )}
+                  {!filter && !active.error && <div className="text-xs text-zinc-400 mb-3">
                     {activeTab === "raw" && "Head to the Ingest tab to add files, URLs, or PDFs."}
                     {activeTab === "wiki" && "Compile your raw sources to generate wiki pages."}
                     {activeTab === "outputs" && "Ask a question or run a health check to generate output."}
                   </div>}
-                  {!filter && onNavigate && (
+                  {active.error && !filter && (
+                    <button onClick={handleRefresh}
+                      className="px-4 py-2 text-xs font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-500 transition-colors duration-150 ease-out">
+                      Retry
+                    </button>
+                  )}
+                  {!filter && !active.error && onNavigate && (
                     <button onClick={() => onNavigate(CATEGORY_EMPTY_ACTIONS[activeTab].action)}
                       className="px-4 py-2 text-xs font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-500 transition-colors duration-150 ease-out">
                       {CATEGORY_EMPTY_ACTIONS[activeTab].label}
@@ -687,19 +796,43 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
 
           {/* Draggable divider */}
           <div
-            onMouseDown={onDragStart}
+            onMouseDown={startDrag("master")}
             className="w-1.5 cursor-col-resize bg-transparent hover:bg-violet-400 active:bg-violet-500 flex-shrink-0 transition-colors duration-150 ease-out relative"
             style={{ marginLeft: "-1px" }}
             title="Drag to resize"
           />
+          </>
+          )}
 
-          {/* Detail column */}
-          <div className="flex-1 flex flex-col min-w-0">
+          {/* Resize handle for the graph-mode preview overlay */}
+          {graphMode && selected && (
+            <div
+              onMouseDown={startDrag("preview")}
+              className="absolute inset-y-0 z-30 w-1.5 cursor-col-resize bg-transparent hover:bg-violet-400 active:bg-violet-500 transition-colors duration-150 ease-out"
+              style={{ right: previewWidth - 3 }}
+              title="Drag to resize"
+            />
+          )}
+
+          {/* Detail pane: a column in list mode, an overlay panel in graph mode */}
+          <div ref={previewRef}
+            style={graphMode ? { width: previewWidth, maxWidth: "80%" } : undefined}
+            className={graphMode
+            ? `absolute inset-y-0 right-0 flex flex-col bg-white border-l border-zinc-200 shadow-2xl z-20 ${selected ? "" : "hidden"}`
+            : "flex-1 flex flex-col min-w-0"}>
+            {graphMode && selected && (
+              <div className="flex items-center justify-end px-2 py-1 border-b border-zinc-100 flex-shrink-0">
+                <button onClick={clearSelection} aria-label="Close preview"
+                  className="p-1 rounded text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 transition-colors duration-150 ease-out">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             {selected ? (
               <>
                 <div className="px-5 py-3 border-b border-zinc-200 flex-shrink-0">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-[180px] flex-1">
                       <h3 className="font-semibold text-zinc-900 truncate text-base tracking-tight">{selected.title || selected.name}</h3>
                       <div className="text-xs text-zinc-400 mt-0.5 flex gap-3 flex-wrap">
                         <span>{selected.rel}</span>
