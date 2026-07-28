@@ -35,6 +35,9 @@ kb/outputs/*
 kb/index/*
 !kb/index/.gitkeep
 
+kb/chats/*
+!kb/chats/.gitkeep
+
 # Temp upload staging
 .tmp_uploads/
 
