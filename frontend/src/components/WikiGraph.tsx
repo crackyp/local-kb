@@ -44,9 +44,9 @@ interface GraphSettings {
 }
 
 const DEFAULT_SETTINGS: GraphSettings = {
-  centerForce: 0.4,
-  repelForce: 1,
-  linkForce: 0.6,
+  centerForce: 0.375,
+  repelForce: 2.25,
+  linkForce: 1.125,
   linkDistance: 90,
   nodeSize: 1,
   linkThickness: 1,
