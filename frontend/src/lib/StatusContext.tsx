@@ -7,6 +7,14 @@ import { api } from "@/lib/api";
 interface StatusContextValue {
   status: StatusResponse | null;
   refresh: () => Promise<void>;
+  /**
+   * Bumped whenever something has written to kb/ (a compile, an ingest, a
+   * reindex). Data hooks watch it so views reload themselves instead of
+   * waiting for the user to hit Refresh. Kept separate from `refresh`, which
+   * polls on a timer and must not drag every file listing along with it.
+   */
+  dataVersion: number;
+  invalidate: () => void;
   /** Selected model shared across all tabs */
   model: string;
   setModel: (m: string) => void;
@@ -19,6 +27,9 @@ const POLL_MS = 10_000;
 export function StatusProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [model, setModel] = useState("");
+  const [dataVersion, setDataVersion] = useState(0);
+
+  const invalidate = useCallback(() => setDataVersion((v) => v + 1), []);
 
   const refresh = useCallback(async () => {
     try {
@@ -52,7 +63,7 @@ export function StatusProvider({ children }: { children: ReactNode }) {
   }, [status, model]);
 
   return (
-    <StatusContext.Provider value={{ status, refresh, model, setModel }}>
+    <StatusContext.Provider value={{ status, refresh, dataVersion, invalidate, model, setModel }}>
       {children}
     </StatusContext.Provider>
   );

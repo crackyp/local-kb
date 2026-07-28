@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api";
 import { useStatus } from "@/lib/StatusContext";
-import { useFileList } from "@/lib/hooks";
+import { useFileList, useGraph } from "@/lib/hooks";
 import type { FileMeta, TrashItem, View } from "@/types";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -167,8 +167,30 @@ function TrashDrawer({ open, onClose, onRestore, onEmptyTrash }: {
   );
 }
 
-function OutboundLinks({ linksTo, wikiFiles, onNavigateTo, onClose }: {
-  linksTo: string[]; wikiFiles: FileMeta[]; onNavigateTo: (file: FileMeta) => void; onClose: () => void;
+function LinkList({ targets, wikiFiles, onNavigateTo }: {
+  targets: string[]; wikiFiles: FileMeta[]; onNavigateTo: (file: FileMeta) => void;
+}) {
+  return (
+    <div className="space-y-1">
+      {targets.map((target) => {
+        const found = wikiFiles.find((f) => f.name === target);
+        return (
+          <button key={target} onClick={() => found && onNavigateTo(found)} disabled={!found}
+            className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors duration-150 ease-out ${
+              found ? "text-violet-600 hover:bg-violet-50 cursor-pointer" : "text-zinc-400 cursor-default"
+            }`}
+            title={found ? `Open "${found.title || found.name}"` : "Page not found in wiki"}>
+            <span className={found ? "" : "opacity-60"}>{found?.title || target}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function PageLinks({ linksTo, linkedFrom, wikiFiles, onNavigateTo, onClose }: {
+  linksTo: string[]; linkedFrom: string[]; wikiFiles: FileMeta[];
+  onNavigateTo: (file: FileMeta) => void; onClose: () => void;
 }) {
   return (
     <div className="w-56 border-l border-zinc-200 bg-zinc-50 flex flex-col flex-shrink-0 transition-colors duration-150 ease-out">
@@ -176,23 +198,27 @@ function OutboundLinks({ linksTo, wikiFiles, onNavigateTo, onClose }: {
         <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-semibold">Links</span>
         <button onClick={onClose} className="text-zinc-400 hover:text-zinc-600 text-xs transition-colors duration-150 ease-out" aria-label="Close links sidebar"><X className="w-3.5 h-3.5" /></button>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {linksTo.map((target) => {
-          const targetName = target.split("/").pop() || target;
-          const found = wikiFiles.find((f) => f.name === targetName);
-          return (
-            <button key={target} onClick={() => found && onNavigateTo(found)} disabled={!found}
-              className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors duration-150 ease-out ${
-                found ? "text-violet-600 hover:bg-violet-50 cursor-pointer" : "text-zinc-400 cursor-default"
-              }`}
-              title={found ? `Open "${found.title || found.name}"` : "Page not found in wiki"}>
-              <span className={found ? "" : "opacity-60"}>{target}</span>
-            </button>
-          );
-        })}
+      <div className="flex-1 overflow-y-auto p-2 space-y-3">
+        {linksTo.length > 0 && (
+          <div>
+            <div className="px-2 pb-1 text-[10px] uppercase tracking-wider text-zinc-400">Links to</div>
+            <LinkList targets={linksTo} wikiFiles={wikiFiles} onNavigateTo={onNavigateTo} />
+          </div>
+        )}
+        {linkedFrom.length > 0 && (
+          <div>
+            <div className="px-2 pb-1 text-[10px] uppercase tracking-wider text-zinc-400">Linked from</div>
+            <LinkList targets={linkedFrom} wikiFiles={wikiFiles} onNavigateTo={onNavigateTo} />
+          </div>
+        )}
       </div>
     </div>
   );
+}
+
+/** Outbound + inbound wiki links for a page. */
+function linkCount(file: FileMeta): number {
+  return (file.links_to?.length ?? 0) + (file.linked_from?.length ?? 0);
 }
 
 interface ExplorerTabProps { onNavigate?: (view: View) => void; }
@@ -336,6 +362,8 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
   const wiki = useFileList("wiki");
   const raw = useFileList("raw");
   const outputs = useFileList("outputs");
+  const { graph } = useGraph(graphMode);
+  const [graphResetKey, setGraphResetKey] = useState(0);
   const lists = useMemo<Record<Category, ReturnType<typeof useFileList>>>(
     () => ({ wiki, raw, outputs }),
     [wiki, raw, outputs],
@@ -491,7 +519,11 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
     [graphMode, selected],
   );
 
-  const handleRefresh = useCallback(() => { active.refresh(); refreshStatus(); }, [active, refreshStatus]);
+  const handleRefresh = useCallback(() => {
+    active.refresh();
+    refreshStatus();
+    setGraphResetKey((k) => k + 1);
+  }, [active, refreshStatus]);
   const switchTab = useCallback((tab: Category) => {
     setActiveTab(tab); setSelected(null); setContent(null); setDeleteConfirm(null);
     // Extension chips are per-tab; carrying one over can filter the new tab to
@@ -730,12 +762,14 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
           {graphMode ? (
             <WikiGraph
               files={active.files}
+              graph={graph}
               selectedRel={selected?.rel ?? null}
               filter={filter}
               onSelect={handleSelect}
               onDeselect={clearSelection}
               getInsetRight={getInsetRight}
               loadError={active.error}
+              resetKey={graphResetKey}
             />
           ) : (
           <>
@@ -840,7 +874,10 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
                         <span>{selected.modified_h}</span>
                         {selected.words && <span>{formatCount(selected.words)} words</span>}
                         {selected.links_to && selected.links_to.length > 0 && (
-                          <span>{selected.links_to.length} link{selected.links_to.length !== 1 ? "s" : ""}</span>
+                          <span>{selected.links_to.length} outbound</span>
+                        )}
+                        {selected.linked_from && selected.linked_from.length > 0 && (
+                          <span>{selected.linked_from.length} inbound</span>
                         )}
                       </div>
                     </div>
@@ -869,9 +906,9 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
                         <button onClick={handlePromote}
                           className="text-xs px-2.5 py-1 rounded bg-violet-600 text-white hover:bg-violet-500 transition-colors duration-150 ease-out">Promote</button>
                       )}
-                      {selected.links_to && selected.links_to.length > 0 && (
+                      {linkCount(selected) > 0 && (
                         <button onClick={() => setOutboundOpen((o) => !o)}
-                          className="text-xs px-2.5 py-1 rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 transition-colors duration-150 ease-out">Links ({selected.links_to.length})</button>
+                          className="text-xs px-2.5 py-1 rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 transition-colors duration-150 ease-out">Links ({linkCount(selected)})</button>
                       )}
                       <div className="relative">
                         <button onClick={() => setDeleteConfirm(selected)}
@@ -968,9 +1005,10 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
                       </div>
                     ) : null}
                   </div>
-                  {activeTab === "wiki" && outboundOpen && selected?.links_to && selected.links_to.length > 0 && (
-                    <OutboundLinks
-                      linksTo={selected.links_to}
+                  {activeTab === "wiki" && outboundOpen && selected && linkCount(selected) > 0 && (
+                    <PageLinks
+                      linksTo={selected.links_to ?? []}
+                      linkedFrom={selected.linked_from ?? []}
                       wikiFiles={wikiFiles}
                       onNavigateTo={(file) => {
                         if (activeTab !== "wiki") switchTab("wiki");

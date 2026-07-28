@@ -895,10 +895,12 @@ async def list_files(category: str):
     # reading the file's first non-empty line for both.
     titles: dict[str, str] = {}
     if category == "wiki":
-        from local_kb.paths import WIKI_INDEX_FILE
-        from local_kb.utils import load_json
+        from local_kb.compile import refresh_wiki_index
         try:
-            wiki_index = load_json(WIKI_INDEX_FILE, {})
+            # Re-syncs against disk first, so pages the chat agent wrote or that
+            # were edited by hand show current titles and links, not last
+            # compile's.
+            wiki_index = refresh_wiki_index()
             wiki_extra: dict[str, dict] = {}
             for fname, entry in wiki_index.items():
                 if isinstance(entry, dict):
@@ -908,9 +910,9 @@ async def list_files(category: str):
                     words = entry.get("words")
                     if words is not None:
                         extra["words"] = words
-                    links_to = entry.get("links_to")
-                    if links_to:
-                        extra["links_to"] = links_to
+                    for key in ("links_to", "linked_from"):
+                        if entry.get(key):
+                            extra[key] = entry[key]
                     if extra:
                         wiki_extra[fname] = extra
         except Exception:
@@ -945,15 +947,27 @@ async def list_files(category: str):
                     meta["title"] = title
                 if category == "wiki":
                     extra = wiki_extra.get(p.name, {})
-                    if "words" in extra:
-                        meta["words"] = extra["words"]
-                    if "links_to" in extra:
-                        meta["links_to"] = extra["links_to"]
+                    for key in ("words", "links_to", "linked_from"):
+                        if key in extra:
+                            meta[key] = extra[key]
             result.append(meta)
         except Exception:
             continue
 
     return {"files": result, "count": len(result)}
+
+
+@app.get("/api/graph")
+async def get_graph():
+    """Edges for the wiki graph view: markdown links plus semantic neighbours.
+
+    Built fresh on every call (the wiki index re-syncs against disk and the
+    similarity pass reuses vectors already in FAISS), so there is no cached
+    graph that can fall behind the wiki.
+    """
+    from local_kb.graph import build_graph
+
+    return build_graph()
 
 
 @app.get("/api/file/{category}/{path:path}")

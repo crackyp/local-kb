@@ -33,6 +33,7 @@ _CFG_DEFAULTS = {
         "top_k": 20,
         "enabled": True,
     },
+    "graph": {"similar_top_k": 5, "similar_min_score": 0.5},
 }
 
 

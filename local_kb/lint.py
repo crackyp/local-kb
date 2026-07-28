@@ -1,7 +1,8 @@
 """Wiki link integrity and orphan analysis."""
 
+from .links import wiki_link_targets
 from .paths import WIKI
-from .utils import read_text, extract_links
+from .utils import read_text
 
 
 def lint_wiki() -> dict:
@@ -17,15 +18,13 @@ def lint_wiki() -> dict:
     broken = []
 
     for p in pages:
-        text = read_text(p)
-        for _, link in extract_links(text):
-            if link.endswith(".md"):
-                from pathlib import Path as _P
-                target = _P(link).name
-                if target not in names:
-                    broken.append((p.name, link))
-                else:
-                    incoming[target] += 1
+        # Same link definition the graph uses, so a page never counts as
+        # orphaned here while showing edges in the graph view.
+        for target in wiki_link_targets(read_text(p), exclude=p.name):
+            if target not in names:
+                broken.append((p.name, target))
+            else:
+                incoming[target] += 1
 
     orphans = [n for n, c in incoming.items() if c == 0]
 

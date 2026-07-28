@@ -7,6 +7,7 @@ import type {
   HealthCheckResponse,
   FilesResponse,
   FileContentResponse,
+  GraphResponse,
   IngestUrlRequest,
   CompileRequest,
   AskRequest,
@@ -171,6 +172,8 @@ export const api = {
 
   listFiles: (category: "raw" | "wiki" | "outputs") =>
     request<FilesResponse>(`/api/files/${category}`),
+
+  getGraph: () => request<GraphResponse>("/api/graph"),
 
   getFile: (category: "raw" | "wiki" | "outputs", path: string) =>
     request<FileContentResponse>(`/api/file/${category}/${encodeURIComponent(path)}`),

@@ -49,3 +49,10 @@ chunk_overlap = 200         # overlap between consecutive chunks
 context_budget = 200000     # max total chars assembled for LLM prompt
 top_k = 50                  # max chunks to retrieve from FAISS
 enabled = true              # set false to always use TF-IDF
+
+[graph]
+# Semantic edges in the Explore graph view. Each page keeps its top-k nearest
+# neighbours; an edge is drawn only where two pages pick each other, which is
+# what stops broad pages from becoming hubs. Raise for a denser graph.
+similar_top_k = 5
+similar_min_score = 0.5     # discard matches weaker than this cosine score

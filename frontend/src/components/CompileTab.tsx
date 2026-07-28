@@ -14,7 +14,7 @@ import {
 } from "@/components/shared";
 
 export function CompileTab() {
-  const { model, refresh: refreshStatus } = useStatus();
+  const { model, refresh: refreshStatus, invalidate } = useStatus();
   const { compiling, liveLines, result, startCompile, stopCompile } = useCompile();
   const [force, setForce] = useState(false);
   const [maxChars, setMaxChars] = useState(524288);
@@ -41,6 +41,8 @@ export function CompileTab() {
       const res = await api.buildIndex({ force: idxForce });
       setIndexResult(res);
       refreshStatus();
+      // Fresh embeddings mean fresh similarity edges.
+      invalidate();
     } catch (e) {
       setIndexResult({ returncode: 1, output: String(e), command: "" });
     } finally {
