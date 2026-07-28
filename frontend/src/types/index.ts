@@ -43,8 +43,18 @@ export interface LlamaCppStatus {
   default_model?: string;
 }
 
+export interface ProviderStatus {
+  name: string;
+  display_name: string;
+  host: string;
+  running: boolean;
+  loaded: string | null;
+  models: string[];
+}
+
 export interface StatusResponse {
   llamacpp: LlamaCppStatus;
+  providers?: ProviderStatus[];
   files: {
     raw: number;
     wiki: number;

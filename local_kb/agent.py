@@ -714,9 +714,13 @@ def chat_stream(
     provider_cfg = CFG.get(provider_name, CFG["llamacpp"])
     timeout = int(provider_cfg.get("timeout", 1200))
 
+    # Strip provider prefix (e.g. "remote/qwen3.6-35b-a3b" -> "qwen3.6-35b-a3b")
+    # so the server receives a plain model name it understands.
+    server_model = model.split("/", 1)[-1] if "/" in model else model
+
     for _ in range(max_iters):
         payload = {
-            "model": model,
+            "model": server_model,
             "messages": history,
             "temperature": temperature,
             "tools": TOOLS,

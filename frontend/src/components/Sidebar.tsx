@@ -124,7 +124,7 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
                 </span>
               )}
             </div>
-            <ModelSelect label="Model" />
+            <ModelSelect label="Model" tone="dark" />
             {status?.llamacpp.running && (
               <button
                 onClick={handleLoad}

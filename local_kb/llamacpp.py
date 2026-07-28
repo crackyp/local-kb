@@ -298,12 +298,16 @@ def generate(prompt: str, model: str, temperature: float = 0.2) -> str:
     mgr, provider_name = resolve_provider(model)
     base_url = mgr.ensure_running(model)
 
+    # Strip provider prefix (e.g. "remote/qwen3.6-35b-a3b" -> "qwen3.6-35b-a3b")
+    # so the server receives a plain model name it understands.
+    server_model = model.split("/", 1)[-1] if "/" in model else model
+
     # Use timeout from the provider's config section if available
     provider_cfg = CFG.get(provider_name, cfg)
     timeout = int(provider_cfg.get("timeout", cfg.get("timeout", 1200)))
 
     payload = {
-        "model": model,
+        "model": server_model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": temperature,
         "stream": False,
@@ -363,17 +367,19 @@ def list_models() -> list[str]:
         for model in info["models"]:
             entries.append((model, model, name))
 
-    # Detect duplicates
+    # Detect duplicates across providers
     seen: dict[str, int] = {}
     for _, model, _ in entries:
         seen[model] = seen.get(model, 0) + 1
     dupes = {m for m, c in seen.items() if c > 1}
 
-    # Prefix duplicates with provider short-name
+    # Prefix duplicates with provider short-name for disambiguation
     result: list[str] = []
     for display, model, provider in entries:
         if model in dupes:
-            short = provider.replace("llamacpp_", "")  # e.g. "local" or "remote"
+            # "local" (not "llamacpp") for the primary — that is the prefix
+            # resolve_provider() maps back to the [llamacpp] section.
+            short = "local" if provider == "llamacpp" else provider.replace("llamacpp_", "")
             result.append(f"{short}/{model}")
         else:
             result.append(display)

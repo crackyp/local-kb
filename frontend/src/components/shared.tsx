@@ -58,28 +58,74 @@ export function CommandResultPanel({
 
 /* ── ModelSelect ────────────────────────────────────────────── */
 
+/** Short provider name used for disambiguating prefixes. Must match
+ *  `list_models()` / `resolve_provider()` in local_kb/llamacpp.py. */
+function providerShort(name: string): string {
+  return name === "llamacpp" ? "local" : name.replace("llamacpp_", "");
+}
+
 export function ModelSelect({
   value,
   onChange,
   label = "Model",
+  tone = "light",
 }: {
   value?: string;
   onChange?: (model: string) => void;
   label?: string;
+  /** "dark" for the sidebar; tabs render on white SectionCards. */
+  tone?: "light" | "dark";
 }) {
   const { status, model: globalModel, setModel: setGlobalModel } = useStatus();
   const current = value ?? globalModel;
   const handleChange = onChange ?? setGlobalModel;
 
+  const selectClass = `w-full mt-1 px-2 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors duration-150 ease-out ${
+    tone === "dark"
+      ? "bg-zinc-800 text-zinc-100 border-zinc-700"
+      : "bg-white text-zinc-900 border-zinc-300"
+  }`;
+
+  const providers = (status?.providers ?? []).filter((p) => p.models.length > 0);
+
+  if (providers.length > 0) {
+    // Mirror list_models(): only a name served by more than one provider gets
+    // a `short/model` prefix, so option values stay unambiguous.
+    const counts = new Map<string, number>();
+    for (const p of providers)
+      for (const m of p.models) counts.set(m, (counts.get(m) ?? 0) + 1);
+
+    return (
+      <div>
+        <label className="text-xs text-zinc-500">{label}</label>
+        <select value={current} onChange={(e) => handleChange(e.target.value)} className={selectClass}>
+          {providers.map((p) => {
+            const short = providerShort(p.name);
+            const groupLabel = short.charAt(0).toUpperCase() + short.slice(1);
+            return (
+              <optgroup key={p.name} label={p.running ? groupLabel : `${groupLabel} (offline)`}>
+                {p.models.map((m) => {
+                  const v = (counts.get(m) ?? 0) > 1 ? `${short}/${m}` : m;
+                  return (
+                    <option key={v} value={v}>
+                      {m}
+                    </option>
+                  );
+                })}
+              </optgroup>
+            );
+          })}
+        </select>
+      </div>
+    );
+  }
+
+  // Fallback: flat list (backend without a `providers` payload).
   if (status?.llamacpp.models && status.llamacpp.models.length > 0) {
     return (
       <div>
         <label className="text-xs text-zinc-500">{label}</label>
-        <select
-          value={current}
-          onChange={(e) => handleChange(e.target.value)}
-          className="w-full mt-1 px-2 py-1.5 border border-zinc-300 rounded-lg text-sm bg-white text-zinc-900 focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors duration-150 ease-out"
-        >
+        <select value={current} onChange={(e) => handleChange(e.target.value)} className={selectClass}>
           {status.llamacpp.models.map((m) => (
             <option key={m} value={m}>
               {m}
