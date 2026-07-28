@@ -137,3 +137,35 @@ export interface TrashItem {
   size: number;
   path: string;
 }
+
+/* ── Chat history (persisted as kb/chats/<id>.json) ─────────── */
+
+export interface ChatToolEvent {
+  name: string;
+  args?: Record<string, unknown>;
+  result?: string;
+}
+
+/** What the user sees in the transcript. */
+export interface ChatUiMessage {
+  role: "user" | "assistant" | "tool";
+  content: string;
+  tools?: ChatToolEvent[];
+}
+
+/** What gets replayed to the model on the next turn. */
+export interface ChatWireMessage {
+  role: string;
+  content?: string | null;
+  tool_call_id?: string;
+  name?: string;
+  tool_calls?: unknown;
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  updatedAt: number;
+  messages: ChatUiMessage[];
+  wire: ChatWireMessage[];
+}

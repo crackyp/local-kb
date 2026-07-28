@@ -14,6 +14,7 @@ import type {
   IndexRequest,
   HealthCheckRequest,
   TrashItem,
+  Conversation,
 } from "@/types";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -201,6 +202,18 @@ export const api = {
       `/api/trash${category ? `?category=${category}` : ""}`,
       { method: "DELETE" }
     ),
+
+  listChats: () => request<{ chats: Conversation[] }>("/api/chats"),
+
+  saveChat: (chat: Conversation) =>
+    request<{ success: boolean }>(`/api/chats/${chat.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(chat),
+    }),
+
+  deleteChat: (id: string) =>
+    request<{ success: boolean }>(`/api/chats/${id}`, { method: "DELETE" }),
 
   chatStream: (
     data: {

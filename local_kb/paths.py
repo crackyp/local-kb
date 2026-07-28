@@ -12,6 +12,7 @@ WIKI = KB / "wiki"
 OUTPUTS = KB / "outputs"
 INDEX = KB / "index"
 CORRECTIONS = KB / "corrections"
+CHATS = KB / "chats"
 TRASH = KB / ".trash"
 
 STATE_FILE = INDEX / "state.json"
@@ -28,5 +29,5 @@ SKIP_PARTS = {"assets", ".git", "node_modules", "__pycache__"}
 
 
 def ensure_dirs():
-    for p in [RAW, RAW_ASSETS, WIKI, OUTPUTS, INDEX, CORRECTIONS, TRASH]:
+    for p in [RAW, RAW_ASSETS, WIKI, OUTPUTS, INDEX, CORRECTIONS, CHATS, TRASH]:
         p.mkdir(parents=True, exist_ok=True)
