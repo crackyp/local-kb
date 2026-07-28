@@ -20,8 +20,10 @@ from .config import CFG
 from .paths import RAW, WIKI, STATE_FILE, DOC_INDEX_FILE, WIKI_INDEX_FILE, ensure_dirs
 from .utils import (
     load_json, save_json, slugify, read_text, sha256_text,
-    extract_links, truncate_at_sentence, should_compile_file,
+    truncate_at_sentence, should_compile_file,
 )
+from .links import resolve_page_file, wiki_link_targets
+from .index_state import wiki_page_hashes
 from .llamacpp import ping as ping_llamacpp, generate as llamacpp_generate
 from .extract import extract_pdf_text, extract_docx_text, extract_pptx_text
 from .safe_ops import soft_delete
@@ -34,7 +36,6 @@ from .safe_ops import soft_delete
 
 def _index_wiki_page(path: Path) -> dict:
     text = read_text(path)
-    links = extract_links(text)
     first = ""
     for ln in text.splitlines():
         if ln.strip():
@@ -43,9 +44,26 @@ def _index_wiki_page(path: Path) -> dict:
     title = first.lstrip("# ").strip() if first else path.stem
     return {
         "title": title,
-        "links_to": [l[1] for l in links],
+        "links_to": wiki_link_targets(text, exclude=path.name),
         "words": len(text.split()),
+        # Lets refresh_wiki_index() spot pages edited outside a compile run.
+        "sha256": sha256_text(text),
     }
+
+
+def _apply_backlinks(index: dict):
+    """Recompute every page's ``linked_from`` list across the whole index.
+
+    Must run over all entries, not just the changed ones: adding or removing a
+    single page changes the backlinks of every page it points at.
+    """
+    incoming: dict[str, list[str]] = {name: [] for name in index}
+    for name, entry in index.items():
+        for target in entry.get("links_to", []):
+            if target != name and target in incoming:
+                incoming[target].append(name)
+    for name, entry in index.items():
+        entry["linked_from"] = sorted(incoming[name])
 
 
 def _write_index_md(index: dict):
@@ -81,9 +99,32 @@ def build_wiki_index(changed_pages: set | None = None):
             if stale not in existing:
                 del index[stale]
 
+    _apply_backlinks(index)
     save_json(WIKI_INDEX_FILE, index)
     _write_index_md(index)
     return index
+
+
+def refresh_wiki_index() -> dict:
+    """Bring ``wiki_index.json`` in sync with what is actually on disk.
+
+    Compare each page's stored hash against the file's current one and reindex
+    only what moved. Every consumer of the index calls this first, so a page
+    written by the chat agent or edited by hand outside a compile run cannot
+    leave the index — and therefore the graph — showing stale links.
+    """
+    index = load_json(WIKI_INDEX_FILE, {})
+    current = wiki_page_hashes()
+    current.pop("INDEX.md", None)
+
+    changed = {n for n, h in current.items() if index.get(n, {}).get("sha256") != h}
+    removed = set(index) - set(current)
+    if not changed and not removed:
+        return index
+
+    # Pass the changed set (not None) so unchanged pages are never re-read;
+    # build_wiki_index prunes the removed ones and recomputes backlinks.
+    return build_wiki_index(changed)
 
 
 # ---------------------------------------------------------------------------
@@ -586,17 +627,18 @@ def compile_documents(
         # an exception escaped, so subsequent runs don't start from a stale
         # FAISS that omits pages already written to disk.
         if changed_wiki_pages or deleted_wiki_pages:
-            from .links import resolve_page_file
-            for page_name in changed_wiki_pages:
-                page_path = WIKI / page_name
-                if page_path.exists():
+            # Re-resolve the whole wiki, not just the pages written this run: a
+            # page created, renamed or merged away here invalidates links that
+            # older, untouched pages are still pointing at. resolve_page_file
+            # only writes when the text actually changes, so this leaves the
+            # mtimes (and the FAISS delta) of unaffected pages alone.
+            for page_path in sorted(WIKI.glob("*.md")):
+                if page_path.name != "INDEX.md":
                     resolve_page_file(page_path)
 
-            # If anything was deleted we touch the full index so removed pages drop out.
-            if deleted_wiki_pages:
-                build_wiki_index(None)
-            else:
-                build_wiki_index(None if force else changed_wiki_pages)
+            # Picks up exactly the pages whose bytes changed, including any the
+            # resolution pass just rewrote.
+            refresh_wiki_index()
 
             # Final FAISS sweep — usually a no-op because the in-loop refresh
             # kept things current, but cheap insurance against missed updates.

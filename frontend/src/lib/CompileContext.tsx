@@ -31,7 +31,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 export function CompileProvider({ children }: { children: ReactNode }) {
-  const { refresh: refreshStatus } = useStatus();
+  const { refresh: refreshStatus, invalidate } = useStatus();
   const [compiling, setCompiling] = useState(false);
   const [liveLines, setLiveLines] = useState<string[]>([]);
   const [result, setResult] = useState<CommandResponse | null>(null);
@@ -65,6 +65,8 @@ export function CompileProvider({ children }: { children: ReactNode }) {
         liveLinesRef.current = [];
         if (res.returncode === 0) {
           refreshStatus();
+          // New/merged pages and rewritten links — reload the file lists and graph.
+          invalidate();
         }
       } catch (error) {
         abortRef.current = null;
@@ -82,7 +84,7 @@ export function CompileProvider({ children }: { children: ReactNode }) {
         setCompiling(false);
       }
     },
-    [pushLine, refreshStatus],
+    [pushLine, refreshStatus, invalidate],
   );
 
   const stopCompile = useCallback(() => {

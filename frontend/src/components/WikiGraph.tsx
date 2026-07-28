@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SlidersHorizontal, ZoomIn, ZoomOut, Maximize2, X } from "lucide-react";
-import type { FileMeta } from "@/types";
+import type { FileMeta, GraphResponse, SimilarityStatus } from "@/types";
 
 /* ── Model ──────────────────────────────────────────────────── */
 
@@ -15,14 +15,18 @@ interface GraphNode {
   vx: number;
   vy: number;
   deg: number;
+  /** Dragged by the user, so the simulation no longer moves it. */
+  pinned: boolean;
 }
 
 interface GraphEdge {
   a: GraphNode;
   b: GraphNode;
-  /** a → b link exists */
+  /** "link" = a markdown link was written; "similar" = the pages embed close together. */
+  kind: "link" | "similar";
+  /** a → b link exists (link edges only) */
   ab: boolean;
-  /** b → a link exists */
+  /** b → a link exists (link edges only) */
   ba: boolean;
 }
 
@@ -36,6 +40,7 @@ interface GraphSettings {
   textFade: number;
   showArrows: boolean;
   showOrphans: boolean;
+  showSimilar: boolean;
 }
 
 const DEFAULT_SETTINGS: GraphSettings = {
@@ -48,6 +53,16 @@ const DEFAULT_SETTINGS: GraphSettings = {
   textFade: 0.35,
   showArrows: false,
   showOrphans: true,
+  showSimilar: true,
+};
+
+/** Why the similarity layer is unavailable, phrased for the settings panel. */
+const SIMILARITY_NOTE: Partial<Record<SimilarityStatus, string>> = {
+  not_built: "Build the search index to see semantic edges.",
+  not_installed: "Install faiss-cpu to see semantic edges.",
+  disabled: "FAISS is disabled in kb.toml.",
+  stale: "Index is out of date — rebuild it for accurate edges.",
+  error: "Could not read the search index.",
 };
 const SETTINGS_KEY = "explorer-graph-settings";
 
@@ -57,11 +72,15 @@ const COLOR = {
   link: "rgba(167,139,250,0.30)",
   linkDim: "rgba(120,113,150,0.07)",
   linkActive: "rgba(196,181,253,0.85)",
+  similar: "rgba(45,212,191,0.26)",
+  similarDim: "rgba(80,120,120,0.06)",
+  similarActive: "rgba(94,234,212,0.75)",
   node: "#8b83b0",
   nodeDim: "#2f2f3d",
   nodeNeighbor: "#a78bfa",
   nodeActive: "#c4b5fd",
   ring: "#ede9fe",
+  pin: "rgba(237,233,254,0.35)",
   text: "#b9b6c9",
   textActive: "#f5f3ff",
   textDim: "#4a4a5c",
@@ -75,6 +94,8 @@ const PAN_MS = 320;
 
 interface WikiGraphProps {
   files: FileMeta[];
+  /** Edges from /api/graph. Null while loading or if the request failed. */
+  graph: GraphResponse | null;
   selectedRel: string | null;
   filter: string;
   onSelect: (file: FileMeta) => void;
@@ -83,15 +104,17 @@ interface WikiGraphProps {
   getInsetRight?: () => number;
   /** Set when the file listing failed, so "empty" isn't mistaken for "no pages". */
   loadError?: string | null;
+  /** Bumped by the Refresh button; releases every node the user pinned by dragging. */
+  resetKey?: number;
 }
 
-export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, getInsetRight, loadError }: WikiGraphProps) {
+export function WikiGraph({ files, graph, selectedRel, filter, onSelect, onDeselect, getInsetRight, loadError, resetKey = 0 }: WikiGraphProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const [settings, setSettings] = useState<GraphSettings>(DEFAULT_SETTINGS);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [stats, setStats] = useState({ nodes: 0, links: 0 });
+  const [stats, setStats] = useState({ nodes: 0, links: 0, similar: 0 });
 
   const nodesRef = useRef<GraphNode[]>([]);
   const edgesRef = useRef<GraphEdge[]>([]);
@@ -110,6 +133,8 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
   const filterRef = useRef(filter);
   const filesRef = useRef(files);
   filesRef.current = files;
+  const graphRef = useRef(graph);
+  graphRef.current = graph;
 
   /* ── Preferences ─────────────────────────────────────────── */
   useEffect(() => {
@@ -177,7 +202,9 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
 
     const c = s.centerForce * alpha * 0.5;
     for (const n of nodes) {
-      if (n === dragNodeRef.current) {
+      // Held or pinned nodes still push on their neighbours above, they just
+      // don't integrate their own velocity — so they stay put.
+      if (n === dragNodeRef.current || n.pinned) {
         n.vx = 0;
         n.vy = 0;
         continue;
@@ -242,23 +269,33 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
     const matches = (n: GraphNode) =>
       !q || n.label.toLowerCase().includes(q) || n.name.toLowerCase().includes(q);
 
-    /* links */
+    /* edges */
     // Clamped in screen pixels so links stay hairlines when zoomed out and don't
     // turn into ribbons when zoomed in.
     ctx.lineWidth = Math.min(Math.max(s.linkThickness, 0.7 / v.k), 2.5 / v.k);
-    for (const e of edgesRef.current) {
-      const active = focus != null && (e.a === focus || e.b === focus);
-      const dim = (focus != null && !active) || (!!q && !matches(e.a) && !matches(e.b));
-      ctx.strokeStyle = active ? COLOR.linkActive : dim ? COLOR.linkDim : COLOR.link;
-      ctx.beginPath();
-      ctx.moveTo(e.a.x, e.a.y);
-      ctx.lineTo(e.b.x, e.b.y);
-      ctx.stroke();
-      if (s.showArrows) {
-        if (e.ab) drawArrow(ctx, e.a, e.b, radiusOf(e.b, s, v.k), ctx.strokeStyle);
-        if (e.ba) drawArrow(ctx, e.b, e.a, radiusOf(e.a, s, v.k), ctx.strokeStyle);
+    // Similar edges first so the authored links read on top of them, and dashed
+    // so the two kinds of relation stay distinguishable when colour is dimmed.
+    for (const pass of ["similar", "link"] as const) {
+      ctx.setLineDash(pass === "similar" ? [4 / v.k, 4 / v.k] : []);
+      for (const e of edgesRef.current) {
+        if (e.kind !== pass) continue;
+        const active = focus != null && (e.a === focus || e.b === focus);
+        const dim = (focus != null && !active) || (!!q && !matches(e.a) && !matches(e.b));
+        ctx.strokeStyle =
+          pass === "similar"
+            ? active ? COLOR.similarActive : dim ? COLOR.similarDim : COLOR.similar
+            : active ? COLOR.linkActive : dim ? COLOR.linkDim : COLOR.link;
+        ctx.beginPath();
+        ctx.moveTo(e.a.x, e.a.y);
+        ctx.lineTo(e.b.x, e.b.y);
+        ctx.stroke();
+        if (s.showArrows && pass === "link") {
+          if (e.ab) drawArrow(ctx, e.a, e.b, radiusOf(e.b, s, v.k), ctx.strokeStyle);
+          if (e.ba) drawArrow(ctx, e.b, e.a, radiusOf(e.a, s, v.k), ctx.strokeStyle);
+        }
       }
     }
+    ctx.setLineDash([]);
 
     /* nodes */
     for (const n of nodesRef.current) {
@@ -287,6 +324,14 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
         ctx.arc(n.x, n.y, r + 3.5 / v.k, 0, Math.PI * 2);
         ctx.lineWidth = 1.5 / v.k;
         ctx.strokeStyle = COLOR.ring;
+        ctx.stroke();
+      } else if (n.pinned) {
+        // Quiet marker so a hand-placed node is identifiable without competing
+        // with the selection ring.
+        ctx.beginPath();
+        ctx.arc(n.x, n.y, r + 2.5 / v.k, 0, Math.PI * 2);
+        ctx.lineWidth = 1 / v.k;
+        ctx.strokeStyle = COLOR.pin;
         ctx.stroke();
       }
     }
@@ -385,8 +430,13 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
   /* ── Graph build ─────────────────────────────────────────── */
 
   const signature = useMemo(
-    () => files.map((f) => `${f.name}>${(f.links_to ?? []).join(",")}`).join("|"),
-    [files],
+    () =>
+      files.map((f) => f.name).join("|") +
+      "#" +
+      (graph?.edges ?? [])
+        .map((e) => `${e.type[0]}${e.a}>${e.b}`)
+        .join(","),
+    [files, graph],
   );
 
   useEffect(() => {
@@ -402,32 +452,30 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
         vx: 0,
         vy: 0,
         deg: 0,
+        // Survives a rebuild: recompiling shouldn't scatter a layout the user
+        // arranged by hand. Only Refresh clears pins.
+        pinned: p?.pinned ?? false,
       };
     });
     const byName = new Map(all.map((n) => [n.name, n]));
 
+    // The API already dedupes within each edge type and orders every pair
+    // a < b, so one map keyed by the pair collapses the two layers. Where a
+    // pair has both, the explicit link wins: it's the stronger claim.
     const edgeMap = new Map<string, GraphEdge>();
-    for (const n of all) {
-      for (const target of n.file.links_to ?? []) {
-        const targetName = target.split("#")[0].split("/").pop();
-        if (!targetName) continue;
-        const m = byName.get(targetName);
-        if (!m || m === n) continue;
-        const forward = n.name < m.name;
-        const key = forward ? `${n.name}|${m.name}` : `${m.name}|${n.name}`;
-        const existing = edgeMap.get(key);
-        if (existing) {
-          if (forward) existing.ab = true;
-          else existing.ba = true;
-        } else {
-          edgeMap.set(key, {
-            a: forward ? n : m,
-            b: forward ? m : n,
-            ab: forward,
-            ba: !forward,
-          });
-        }
-      }
+    for (const e of graphRef.current?.edges ?? []) {
+      if (e.type === "similar" && !settings.showSimilar) continue;
+      const a = byName.get(e.a);
+      const b = byName.get(e.b);
+      if (!a || !b || a === b) continue;
+      const key = `${e.a}|${e.b}`;
+      if (edgeMap.get(key)?.kind === "link") continue;
+      edgeMap.set(
+        key,
+        e.type === "link"
+          ? { a, b, kind: "link", ab: e.ab, ba: e.ba }
+          : { a, b, kind: "similar", ab: false, ba: false },
+      );
     }
 
     const edges = [...edgeMap.values()];
@@ -462,10 +510,14 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
     neighborsRef.current = neighbors;
     hoverRef.current = null;
     if (prev.size === 0) fittedRef.current = false;
-    setStats({ nodes: nodes.length, links: keptEdges.length });
+    setStats({
+      nodes: nodes.length,
+      links: keptEdges.filter((e) => e.kind === "link").length,
+      similar: keptEdges.filter((e) => e.kind === "similar").length,
+    });
     reheat(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature, settings.showOrphans]);
+  }, [signature, settings.showOrphans, settings.showSimilar]);
 
   /* ── External state → redraw ─────────────────────────────── */
 
@@ -496,6 +548,16 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
     filterRef.current = filter;
     ensureLoop();
   }, [filter, ensureLoop]);
+  // Refresh releases the hand-placed nodes and lets the layout settle again.
+  const firstReset = useRef(true);
+  useEffect(() => {
+    if (firstReset.current) {
+      firstReset.current = false;
+      return;
+    }
+    for (const n of nodesRef.current) n.pinned = false;
+    reheat(0.6);
+  }, [resetKey, reheat]);
   useEffect(() => {
     reheat(0.4);
   }, [settings, reheat]);
@@ -627,6 +689,10 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
       if (clicked) {
         if (node) onSelect(node.file);
         else onDeselect();
+      } else if (node) {
+        // A real drag places the node deliberately — leave it where it was put
+        // instead of letting the simulation pull it back to equilibrium.
+        node.pinned = true;
       }
       ensureLoop();
     },
@@ -677,6 +743,7 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
 
   // The canvas stays mounted even when empty so its size observer keeps running.
   const empty = files.length === 0;
+  const similarityNote = graph ? SIMILARITY_NOTE[graph.similarity] ?? null : null;
 
   const chrome =
     "bg-zinc-900/80 backdrop-blur border border-white/10 text-zinc-400 hover:text-violet-200 hover:border-violet-400/40 shadow-lg transition-colors duration-150 ease-out";
@@ -711,7 +778,8 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
       ) : (
         <div className="absolute bottom-3 left-3 z-10 text-[10px] uppercase tracking-wider text-zinc-500 pointer-events-none select-none">
           {stats.nodes} node{stats.nodes !== 1 ? "s" : ""} · {stats.links} link{stats.links !== 1 ? "s" : ""}
-          <span className="ml-2 normal-case tracking-normal text-zinc-600">drag to move · scroll to zoom</span>
+          {stats.similar > 0 && <span className="text-teal-500/80"> · {stats.similar} similar</span>}
+          <span className="ml-2 normal-case tracking-normal text-zinc-600">drag to pin · scroll to zoom · refresh to release</span>
         </div>
       )}
 
@@ -738,6 +806,15 @@ export function WikiGraph({ files, selectedRel, filter, onSelect, onDeselect, ge
                 checked={settings.showOrphans}
                 onChange={(v) => update("showOrphans", v)}
               />
+              <Toggle
+                label="Similar pages"
+                checked={settings.showSimilar}
+                disabled={similarityNote != null}
+                onChange={(v) => update("showSimilar", v)}
+              />
+              {similarityNote && (
+                <div className="text-[10px] leading-snug text-amber-300/70">{similarityNote}</div>
+              )}
             </Group>
 
             <Group label="Display">
@@ -905,17 +982,24 @@ function Toggle({
   label,
   checked,
   onChange,
+  disabled,
 }: {
   label: string;
   checked: boolean;
   onChange: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
-    <label className="flex items-center justify-between gap-2 text-[11px] text-zinc-300 cursor-pointer">
+    <label
+      className={`flex items-center justify-between gap-2 text-[11px] ${
+        disabled ? "text-zinc-500 cursor-default" : "text-zinc-300 cursor-pointer"
+      }`}
+    >
       <span>{label}</span>
       <input
         type="checkbox"
         checked={checked}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
         className="accent-violet-600"
       />

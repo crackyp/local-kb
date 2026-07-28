@@ -8,13 +8,45 @@ resolved, so the wiki has no dead links.
 """
 
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .paths import WIKI, WIKI_INDEX_FILE
-from .utils import load_json
+from .utils import extract_links, load_json
 
 # Matches [Text](href.md). Only .md targets are considered wiki links.
 _LINK_PATTERN = re.compile(r"\[([^\]]+)\]\(([^)\s]+\.md)\)")
+
+# A scheme (https:, mailto:), a protocol-relative //host, or a root-relative
+# /path — none of which can point at a page inside kb/wiki/.
+_FOREIGN_HREF = re.compile(r"^(?:[a-z][a-z0-9+.\-]*:|//|/)", re.IGNORECASE)
+
+
+def wiki_link_targets(text: str, exclude: str | None = None) -> list[str]:
+    """Return the wiki pages *text* links to, as bare filenames.
+
+    Keeps only in-wiki markdown links: external URLs, ``mailto:``, root-relative
+    paths, bare ``#anchors`` and images are all dropped, trailing anchors are
+    stripped, and self-links and duplicates are removed. Targets are returned
+    whether or not the page exists — :func:`~local_kb.lint.lint_wiki` is what
+    reports the dead ones.
+    """
+    out: list[str] = []
+    seen: set[str] = set()
+
+    for _link_text, href in extract_links(text):
+        href = href.strip()
+        if not href or _FOREIGN_HREF.match(href):
+            continue
+        target = href.split("#", 1)[0]
+        if not target.lower().endswith(".md"):
+            continue
+        name = PurePosixPath(target.replace("\\", "/")).name
+        if not name or name.lower() == "index.md" or name == exclude or name in seen:
+            continue
+        seen.add(name)
+        out.append(name)
+
+    return out
 
 
 def _normalize(s: str) -> str:

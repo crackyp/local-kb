@@ -10,8 +10,30 @@ export interface FileMeta {
   title?: string;
   /** Wiki-only: word count from wiki_index.json */
   words?: number;
-  /** Wiki-only: outbound link targets from wiki_index.json */
+  /** Wiki-only: pages this one links to, as bare filenames */
   links_to?: string[];
+  /** Wiki-only: pages that link here, as bare filenames */
+  linked_from?: string[];
+}
+
+/** One edge of the wiki graph. Endpoints are wiki filenames. */
+export type GraphEdge =
+  | { a: string; b: string; type: "link"; ab: boolean; ba: boolean }
+  | { a: string; b: string; type: "similar"; weight: number };
+
+/** Why the semantic layer is or isn't available. */
+export type SimilarityStatus =
+  | "ready"
+  | "stale"
+  | "not_built"
+  | "not_installed"
+  | "disabled"
+  | "error";
+
+export interface GraphResponse {
+  edges: GraphEdge[];
+  counts: { link: number; similar: number };
+  similarity: SimilarityStatus;
 }
 
 export interface LlamaCppStatus {
