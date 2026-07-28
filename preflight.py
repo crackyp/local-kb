@@ -87,16 +87,25 @@ def check_node_modules() -> bool:
 
 
 def check_port_free(port: int, label: str) -> bool:
-    """Check that a port is available for binding."""
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(("127.0.0.1", port))
-        _ok(f"Port {port} ({label}) is free")
-        return True
-    except OSError:
-        _fail(f"Port {port} ({label}) is already in use — "
-              f"set KB_{label.upper().replace(' ', '_')}_PORT to a free port")
+    """Check that nothing is already listening on *port*.
+
+    Probes with connect() rather than bind(). On Windows SO_REUSEADDR lets a
+    socket bind a port that another socket is already actively listening on, so
+    a bind probe reports "free" while a server is running — that is how several
+    uvicorn instances used to stack on the same port, each serving a different
+    snapshot of kb.toml. A refused connection also correctly reports a lingering
+    TIME_WAIT socket as free.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(1)
+        in_use = s.connect_ex(("127.0.0.1", port)) == 0
+    if in_use:
+        _fail(f"Port {port} ({label}) is already in use — stop whatever is "
+              f"listening on it, or set "
+              f"KB_{label.upper().replace(' ', '_')}_PORT to a free port")
         return False
+    _ok(f"Port {port} ({label}) is free")
+    return True
 
 
 def check_llamacpp() -> bool:

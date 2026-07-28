@@ -31,15 +31,35 @@ set NEXT_PUBLIC_API_BASE=http://127.0.0.1:%KB_API_PORT%
 
 start "Local KB Backend" cmd /k "py -m uvicorn backend.app:app --reload --port %KB_API_PORT%"
 
-timeout /t 3 /nobreak >nul
-
 cd frontend
 start "Local KB Frontend" cmd /k "npm run dev -- --port %KB_FRONTEND_PORT%"
 cd ..
 
-timeout /t 5 /nobreak >nul
-
-start http://localhost:%KB_FRONTEND_PORT%
+:: Wait until the backend actually responds before opening the browser.
+:: Without this, the page loads while the API is still starting (or dead)
+:: and every fetch throws "Failed to fetch".
+set API_URL=http://127.0.0.1:%KB_API_PORT%/api/status
+set READY=0
+for /l %%i in (1,1,30) do (
+  curl -s -o nul -w "%%{http_code}" "%API_URL%" 2>nul | findstr /r "^[0-9][0-9][0-9]$" >nul
+  if not errorlevel 1 (
+    set READY=1
+    goto :backend_ready
+  )
+  timeout /t 1 /nobreak >nul
+)
+:backend_ready
+if "%READY%"=="1" (
+  echo Backend is up on http://127.0.0.1:%KB_API_PORT% — opening UI.
+  start http://localhost:%KB_FRONTEND_PORT%
+) else (
+  echo.
+  echo [WARN] Backend did not become ready within 30s.
+  echo        The "Local KB Backend" window may have crashed or port %KB_API_PORT% is in use.
+  echo        Open http://localhost:%KB_FRONTEND_PORT% manually once it is running.
+  echo        (You will see "Failed to fetch" errors until the backend is up.)
+  start http://localhost:%KB_FRONTEND_PORT%
+)
 
 echo Local KB is running.
 echo Open http://localhost:%KB_FRONTEND_PORT% in your browser if it didn't open automatically.
