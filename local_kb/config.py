@@ -4,7 +4,7 @@ import json
 from .paths import ROOT
 
 _CFG_DEFAULTS = {
-    "model": {"default": "qwopus:v3"},
+    "model": {"default": "qwen3.6-35b-a3b"},
     "llamacpp": {
         "host": "127.0.0.1",
         "chat_port": 8080,

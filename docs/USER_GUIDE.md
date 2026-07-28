@@ -59,8 +59,8 @@ python -m pip install -r requirements-ocr.txt
 
 ```bash
 cd local-kb
-python scripts/kb.py compile --model qwopus:v3
-python scripts/kb.py ask "What is this project for?" --model qwopus:v3
+python scripts/kb.py compile --model qwen3.6-35b-a3b
+python scripts/kb.py ask "What is this project for?" --model qwen3.6-35b-a3b
 python scripts/kb.py lint
 ```
 
@@ -111,15 +111,15 @@ python scripts/kb.py ingest-pdf "~/Papers/*.pdf" --copy-original
 ### 4) Compile wiki pages
 
 ```bash
-python scripts/kb.py compile --model qwopus:v3
-python scripts/kb.py compile --model qwopus:v3 --force
+python scripts/kb.py compile --model qwen3.6-35b-a3b
+python scripts/kb.py compile --model qwen3.6-35b-a3b --force
 ```
 
 ### 5) Ask questions
 
 ```bash
-python scripts/kb.py ask "What are the top 5 concepts?" --model qwopus:v3
-python scripts/kb.py ask "Question" --model qwopus:v3 --limit 8
+python scripts/kb.py ask "What are the top 5 concepts?" --model qwen3.6-35b-a3b
+python scripts/kb.py ask "Question" --model qwen3.6-35b-a3b --limit 8
 ```
 
 ### 6) Lint wiki links
@@ -197,7 +197,7 @@ Add the tag to `kb.toml [llamacpp] models` and make sure your local chat server 
 Compile first:
 
 ```bash
-python scripts/kb.py compile --model qwopus:v3
+python scripts/kb.py compile --model qwen3.6-35b-a3b
 ```
 
 ### `PDF ingest requires pypdf`

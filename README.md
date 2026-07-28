@@ -81,10 +81,10 @@ python scripts/kb.py ingest-url https://example.com --download-images
 python scripts/kb.py ingest-pdf "~/Papers/*.pdf"
 
 # Compile wiki pages
-python scripts/kb.py compile --model qwopus:v3
+python scripts/kb.py compile --model qwen3.6-35b-a3b
 
 # Ask questions
-python scripts/kb.py ask "What are the key themes and contradictions?" --model qwopus:v3
+python scripts/kb.py ask "What are the key themes and contradictions?" --model qwen3.6-35b-a3b
 
 # Check wiki health
 python scripts/kb.py lint
