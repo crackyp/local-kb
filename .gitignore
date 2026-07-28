@@ -38,6 +38,10 @@ kb/index/*
 kb/chats/*
 !kb/chats/.gitkeep
 
+# Local configuration — hosts, model tags and tuning are per-machine.
+# Copy kb.toml.example to kb.toml and edit that.
+kb.toml
+
 # Temp upload staging
 .tmp_uploads/
 

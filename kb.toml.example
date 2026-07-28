@@ -1,5 +1,12 @@
-# Local KB configuration
-# Edit these values to customise behaviour. Delete any line to use its default.
+# Local KB configuration — example.
+#
+# Copy this file to kb.toml and edit that copy:
+#
+#     cp kb.toml.example kb.toml
+#
+# kb.toml is gitignored, so your own hosts, model tags and tuning stay on your
+# machine and never reach the repo. Every value here is optional — delete any
+# line to fall back to its built-in default, or skip the file entirely.
 
 [model]
 default = "qwen3.6-35b-a3b"
