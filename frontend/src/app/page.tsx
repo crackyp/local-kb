@@ -22,7 +22,7 @@ export default function HomePage() {
           <div className="flex min-h-screen bg-zinc-100">
             <Sidebar activeView={activeView} onNavigate={setActiveView} />
             <main className="flex-1 p-8 overflow-y-auto">
-              <div className="max-w-5xl mx-auto text-zinc-900">
+              <div className={activeView === "explorer" ? "text-zinc-900" : "max-w-5xl mx-auto text-zinc-900"}>
                 <div key={activeView} className="animate-in fade-in duration-200">
                   {activeView === "ingest" && <IngestTab />}
                   {activeView === "compile" && <CompileTab />}
