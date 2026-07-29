@@ -34,10 +34,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from local_kb.config import CFG
-from local_kb.paths import (
-    RAW, RAW_ASSETS, WIKI, OUTPUTS, CHATS, TEXT_EXTENSIONS,
-    EXTRACTABLE_EXTENSIONS, ensure_dirs,
-)
+from local_kb.paths import RAW, RAW_ASSETS, WIKI, OUTPUTS, CHATS, ensure_dirs
 from local_kb.utils import (
     slugify, unique_path, read_text, resolve_input_patterns,
     truncate_at_sentence, save_json,
@@ -311,23 +308,10 @@ async def ingest_upload(files: List[UploadFile] = File(...)):
     saved = []
     for f in files:
         name = safe_name(f.filename or "upload")
-        suffix = Path(name).suffix.lower()
-        # Text documents and extractable formats (pdf, docx, pptx) belong in raw/
-        # so the compiler can process them. Everything else — images, archives,
-        # etc. — goes to raw/assets/, which the scanner explicitly excludes.
-        base = (
-            RAW
-            if (suffix in TEXT_EXTENSIONS or suffix in EXTRACTABLE_EXTENSIONS)
-            else RAW_ASSETS
-        )
-        dst = unique_path(base / name)
+        dst = unique_path(RAW / name)
         content = await f.read()
         dst.write_bytes(content)
-        saved.append({
-            "name": dst.name,
-            "size": len(content),
-            "path": str(dst.relative_to(RAW)),
-        })
+        saved.append({"name": dst.name, "size": len(content)})
     return {"saved": saved, "count": len(saved)}
 
 

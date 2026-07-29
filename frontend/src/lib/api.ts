@@ -77,7 +77,7 @@ export const api = {
   ingestUpload: (files: File[]) => {
     const form = new FormData();
     files.forEach((f) => form.append("files", f));
-    return request<{ saved: { name: string; size: number; path: string }[]; count: number }>(
+    return request<{ saved: { name: string; size: number }[]; count: number }>(
       "/api/ingest/upload",
       { method: "POST", body: form }
     );
