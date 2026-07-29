@@ -81,7 +81,13 @@ export function IngestTab() {
     withRefresh(async () => {
       if (!uploadFiles.length) return;
       const res = await api.ingestUpload(uploadFiles);
-      setResult({ returncode: 0, output: `Uploaded ${res.count} file(s):\n${res.saved.map((s) => `  ${s.name} (${(s.size / 1024).toFixed(1)} KB)`).join("\n")}`, command: "" });
+      setResult({
+        returncode: 0,
+        output:
+          `Uploaded ${res.count} file(s):\n` +
+          res.saved.map((s) => `  ${s.name} (${(s.size / 1024).toFixed(1)} KB)${s.path ? ` -> ${s.path}` : ``}`).join("\n"),
+        command: "",
+      });
       setUploadFiles([]);
     });
 
