@@ -43,9 +43,9 @@ export default function HomePage() {
 
             {/* Mobile sidebar drawer — overlay when open */}
             <div
-              className={`md:hidden fixed inset-0 z-50 transform transition-transform duration-200 ease-out ${
+              className={`md:hidden fixed inset-0 z-[60] transform transition-transform duration-200 ease-out ${
                 mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-              }`}
+              }}`>
             >
               {/* Backdrop */}
               <div
