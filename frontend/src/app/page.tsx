@@ -64,7 +64,7 @@ export default function HomePage() {
             {/* Mobile app bar */}
             <MobileAppBar
               title={VIEW_TITLES[activeView]}
-              onMenuClick={() => setMobileMenuOpen(true)}
+              onMenuClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             />
 
             <main
