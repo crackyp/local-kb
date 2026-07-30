@@ -24,7 +24,7 @@ interface MobileNavBarProps {
 
 export function MobileNavBar({ activeView, onNavigate }: MobileNavBarProps) {
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-zinc-900 text-zinc-100 border-t border-zinc-700 flex justify-around items-center h-14 safe-area-inset-bottom">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-zinc-900 text-zinc-100 border-t border-zinc-700 flex justify-around items-center h-14 safe-area-inset-bottom z-50">
       {NAV_ITEMS.map((item) => {
         const isActive = activeView === item.id;
         return (
