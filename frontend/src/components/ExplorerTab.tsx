@@ -621,7 +621,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
       <div key={file.rel} data-index={index} role="option" aria-selected={isSelected} tabIndex={-1}
         onClick={() => { handleSelect(file); setFocusIndex(index); }}
         onMouseEnter={() => setFocusIndex(index)}
-        className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors duration-150 ease-out ${isSelected ? "bg-violet-50" : "hover:bg-zinc-50"} ${isFocused && !isSelected ? "bg-zinc-50" : ""}`}
+        className={`flex items-center gap-3 px-3 py-2.5 md:py-2 cursor-pointer transition-colors duration-150 ease-out ${isSelected ? "bg-violet-50" : "hover:bg-zinc-50"} ${isFocused && !isSelected ? "bg-zinc-50" : ""}`}
         style={{ borderLeft: isSelected ? "3px solid #8b5cf6" : "3px solid transparent" }}>
         <FileText className="w-4 h-4 text-zinc-400 flex-shrink-0" />
         <div className="flex-1 min-w-0">
@@ -672,7 +672,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
       <div className="flex flex-col h-[calc(100vh-8rem)] bg-white rounded shadow-sm border border-zinc-200 overflow-hidden transition-colors duration-150 ease-out">
         {/* Command bar. Every control is h-8 so the row shares one baseline; groups are
             separated by gap-3, items within a group by gap-2. */}
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-zinc-200 bg-white flex-shrink-0">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-zinc-200 bg-white flex-shrink-0 md:flex-nowrap md:gap-3">
           <div className="flex items-center gap-0.5 bg-zinc-100 rounded p-0.5">
             {CATEGORIES.map((tab) => (
               <button key={tab} onClick={() => switchTab(tab)}
@@ -702,11 +702,11 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
               ))}
             </div>
           )}
-          <div className="relative w-64 flex-shrink-0">
+          <div className="relative w-full md:w-64 flex-shrink-0">
             <input ref={filterRef} type="text" value={filter}
               onChange={(e) => { setFilter(e.target.value); setFocusIndex(-1); }}
               placeholder="Filter…  (/)"
-              className={`w-full h-8 pl-3 ${filter ? "pr-20" : "pr-3"} text-xs border border-zinc-300 rounded focus:ring-2 focus:ring-violet-500 focus:border-violet-500 bg-white transition-colors duration-150 ease-out`} />
+              className={`w-full h-9 md:h-8 pl-3 ${filter ? "pr-20" : "pr-3"} text-xs border border-zinc-300 rounded focus:ring-2 focus:ring-violet-500 focus:border-violet-500 bg-white transition-colors duration-150 ease-out`} />
             {filter && <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] tabular-nums text-zinc-400 pointer-events-none">{filteredFiles.length} of {active.files.length}</span>}
           </div>
           {/* Phase 3: Filter chips — only when there's more than one extension to pick
@@ -736,7 +736,7 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
           <div className="flex items-center gap-2 ml-auto flex-shrink-0">
             {!graphMode && (
               <select value={effectiveSort} onChange={(e) => setSort(e.target.value)}
-                className="h-8 pl-2 pr-1 text-xs border border-zinc-300 rounded bg-white text-zinc-700 hover:bg-zinc-50 transition-colors duration-150 ease-out">
+                className="h-9 md:h-8 pl-2 pr-1 text-xs border border-zinc-300 rounded bg-white text-zinc-700 hover:bg-zinc-50 transition-colors duration-150 ease-out">
                 <option value="newest">Newest</option>
                 <option value="oldest">Oldest</option>
                 <option value="name_asc">A→Z</option>
@@ -746,12 +746,12 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
             )}
             <div className="w-px h-5 bg-zinc-200" aria-hidden="true" />
             <button onClick={() => { setTrashOpen(true); setDeleteConfirm(null); }}
-              className="h-8 px-3 inline-flex items-center gap-1.5 text-xs font-medium rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-800 transition-colors duration-150 ease-out">
+              className="h-9 md:h-8 px-3 inline-flex items-center gap-1.5 text-xs font-medium rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-800 transition-colors duration-150 ease-out">
               <Trash2 className="w-3.5 h-3.5" />
               Trash
             </button>
             <button onClick={handleRefresh} title="Refresh" aria-label="Refresh"
-              className="h-8 w-8 inline-flex items-center justify-center rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-800 transition-colors duration-150 ease-out">
+              className="h-9 md:h-8 w-9 md:w-8 inline-flex items-center justify-center rounded border border-zinc-300 text-zinc-600 hover:bg-zinc-50 hover:text-zinc-800 transition-colors duration-150 ease-out">
               <RefreshCcw className="w-3.5 h-3.5" />
             </button>
           </div>
