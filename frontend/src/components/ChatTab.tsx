@@ -75,7 +75,7 @@ export function ChatTab() {
           </div>
         </div>
 
-        <div className="flex gap-3 h-[28rem]">
+        <div className="flex gap-3 h-[28rem] flex-col md:flex-row">
           <HistoryRail
             conversations={conversations}
             activeId={activeId}
@@ -214,7 +214,7 @@ function HistoryRail({
   }
 
   return (
-    <div className="w-52 shrink-0 overflow-y-auto bg-zinc-50 rounded border border-zinc-200 p-2 space-y-3">
+    <div className="w-52 shrink-0 overflow-y-auto hidden md:block bg-zinc-50 rounded border border-zinc-200 p-2 space-y-3">
       {conversations.length === 0 && (
         <p className="text-xs text-zinc-400 text-center py-4">No saved chats yet</p>
       )}

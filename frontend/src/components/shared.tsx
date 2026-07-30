@@ -18,7 +18,7 @@ export function SectionCard({
   accent?: boolean;
 }) {
   return (
-    <div className={`bg-white rounded shadow-sm border border-zinc-200 p-6 ${accent ? "border-l-2 border-l-violet-500" : ""} transition-colors duration-150 ease-out`}>
+    <div className={`bg-white rounded shadow-sm border border-zinc-200 p-4 md:p-6 ${accent ? "border-l-2 border-l-violet-500" : ""} transition-colors duration-150 ease-out`}>
       <h2 className="text-lg font-semibold text-zinc-900 mb-2 tracking-tight">{title}</h2>
       {description && (
         <p className="text-sm text-zinc-500 mb-4">{description}</p>

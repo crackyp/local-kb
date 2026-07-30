@@ -159,12 +159,12 @@ export function IngestTab() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden transition-colors duration-150 ease-out">
-        <div className="flex border-b border-zinc-200">
+        <div className="flex overflow-x-auto border-b border-zinc-200 flex-shrink-0">
           {SUB_TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => { setMode(tab.id); setResult(null); }}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium transition-colors duration-150 ease-out ${
+              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors duration-150 ease-out ${
                 mode === tab.id
                   ? "text-violet-600 border-b-2 border-violet-600 bg-violet-50"
                   : "text-zinc-500 hover:text-zinc-700"
@@ -342,7 +342,7 @@ export function IngestTab() {
                   </div>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-zinc-500">Max pages (0 = all)</label>
                   <input type="number" min={0} max={5000} value={pdfMaxPages} onChange={(e) => setPdfMaxPages(Number(e.target.value))} className="w-full mt-1 px-2 py-1 border rounded text-sm" />

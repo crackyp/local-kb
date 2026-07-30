@@ -55,7 +55,7 @@ export function CompileTab() {
   return (
     <div className="space-y-6">
       <SectionCard title="Compile Wiki" description="Generate wiki pages from raw sources using the LLM.">
-        <div className="grid grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <ModelSelect value={model} />
           <div>
             <label className="text-xs text-zinc-500">Max source chars</label>
@@ -68,7 +68,7 @@ export function CompileTab() {
               <option value={524288}>512K (max context)</option>
             </select>
           </div>
-          <div className="flex flex-col gap-2 pt-5">
+          <div className="flex flex-col gap-2 pt-5 sm:pt-0">
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} className="rounded" />
               <span className="text-sm">Force recompile all docs</span>
@@ -91,7 +91,7 @@ export function CompileTab() {
       </SectionCard>
 
       <SectionCard title="FAISS Index" description="Build or rebuild the vector search index.">
-        <div className="flex items-center gap-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={idxForce} onChange={(e) => setIdxForce(e.target.checked)} className="rounded" />
             <span className="text-sm">Force rebuild index</span>
