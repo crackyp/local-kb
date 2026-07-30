@@ -6,137 +6,75 @@
 1. **Bottom navigation bar** — 3-5 primary destinations, within thumb reach (Material Design / iOS tab bar)
 2. **Hamburger/side drawer** — secondary navigation, space-efficient
 3. **Floating Action Button (FAB)** — single primary action, always accessible
-4. **Swipe gestures** — common in note-taking (swipe to reveal actions, swipe between tabs)
-5. **Touch targets** — minimum 44px (iOS) / 48px (Android) for tap targets
-6. **Adaptive layout** — sidebar on desktop, bottom nav on mobile (Material 3 adaptive navigation)
+4. **Touch targets** — minimum 44px (iOS) / 48px (Android) for tap targets
+5. **Adaptive layout** — sidebar on desktop, bottom nav on mobile (Material 3 adaptive navigation)
 
 ### Tailwind CSS Responsive Patterns
 - Mobile-first breakpoints: `sm` (640px), `md` (768px), `lg` (1024px), `xl` (1280px), `2xl` (1536px)
 - Use responsive prefixes: `md:flex-row`, `md:w-56`, etc.
 - Touch-friendly padding: `p-4` minimum for tap targets
-- Use `min-h-screen`, `h-dvh` for mobile viewport units
+- Use `h-dvh` for mobile viewport units (avoids URL bar resize issues)
 - Drawer/slider patterns with `transform translate-x-0/translate-x-full` and `transition-transform`
 
 ## Current Codebase Analysis
 
-### Architecture
 - **Root**: `page.tsx` — flexbox layout with `<Sidebar>` + `<main>`
 - **Sidebar.tsx** — fixed 224px (w-56), collapsible, 5 nav items + status pills + refresh
-- **page.tsx** — wraps tabs in `max-w-5xl mx-auto` for non-explorer views
-- **ExplorerTab.tsx** (1079 lines) — complex file explorer with graph view, list view, search, trash drawer
-- **WikiGraph.tsx** — canvas-based graph, 938+ lines
-- **ChatTab.tsx** — chat interface with message history
+- **ExplorerTab.tsx** — complex file explorer with graph view, list view, search, trash drawer
 - No responsive utilities used anywhere — desktop-only design
 
-### Mobile Pain Points
+## Mobile Pain Points
 1. Sidebar takes 25%+ of screen width on mobile
 2. No navigation accessible from main content area
 3. Explorer toolbar has too many controls in a horizontal row
-4. Graph canvas is difficult to navigate on touch
-5. File list items may be too small for touch
-6. Sidebar status pills take vertical space that could be used for content
+4. File list items are too small for touch (~40px height)
+5. Sidebar status pills take vertical space
 
-## Implementation Plan
+## Implementation Status
 
-### Phase 1: Mobile-Responsive Layout Foundation
-**Files**: `page.tsx`, `Sidebar.tsx`, `globals.css`
+### Phase 1: ✅ Mobile-Responsive Layout Foundation (COMMITTED)
+**Files**: `MobileNavBar.tsx` (NEW), `MobileAppBar.tsx` (NEW), `page.tsx`, `globals.css`, `layout.tsx`
 
-1. **page.tsx**: Make layout responsive
-   - Desktop: sidebar + main (current behavior)
-   - Mobile (`md:hidden`): hide sidebar, show bottom nav
-   - Add a top app bar on mobile with hamburger menu icon
+1. **page.tsx**: Responsive layout with `hidden md:block` sidebar / `md:hidden` bottom nav
+2. **Sidebar.tsx**: Unchanged (works as-is in desktop layout)
+3. **MobileNavBar.tsx** (NEW): Bottom fixed nav bar with 5 tabs, `h-14` touch targets
+4. **MobileAppBar.tsx** (NEW): Top app bar with hamburger menu (mobile only)
+5. **globals.css**: Added `dvh` viewport units, `safe-area-inset` CSS, `touch-action`
+6. **layout.tsx**: Added `viewport` export for proper mobile rendering
 
-2. **Sidebar.tsx**: Make responsive
-   - Desktop: keep current design (`md:flex`)
-   - Mobile: transform into a slide-over drawer (`md:hidden fixed inset-y-0 left-0 z-50`)
-   - Add overlay backdrop when drawer is open
-   - Drawer slides in with `transform -translate-x-full → translate-x-0`
-
-3. **Add MobileNavBar component** (new file)
-   - Bottom fixed bar with 5 icons: Explorer, Chat, Ingest, Compile, Quality
-   - Uses `fixed bottom-0 left-0 right-0 bg-zinc-900 text-zinc-100`
-   - Touch targets: `h-14` minimum, icons `w-5 h-5`
-   - Active state with violet accent
-   - Shows on `md:hidden`, hidden on desktop
-
-4. **Add MobileAppBar component** (new file)
-   - Top fixed bar on mobile only (`md:hidden`)
-   - Shows app title + hamburger menu button
-   - Hamburger opens the sidebar drawer
-
-### Phase 2: Explorer Tab Mobile Optimizations
+### Phase 2: ✅ Explorer Tab Mobile Optimizations (COMMITTED)
 **File**: `ExplorerTab.tsx`
 
-1. **Toolbar**: Stack controls vertically on mobile
-   - Desktop: horizontal row of category tabs, view toggles, search, actions
-   - Mobile: 
-     - Category tabs: horizontal scrollable overflow-x-auto
-     - Search: full width below category tabs
-     - Actions: icon-only buttons in a compact row
+1. **Toolbar**: `flex-wrap` command bar that wraps on mobile (`md:flex-nowrap`)
+2. **Search**: Full width on mobile (`w-full md:w-64`), taller input (`h-9 md:h-8`)
+3. **Actions**: Larger touch targets (`h-9 md:h-8` for buttons)
+4. **File list**: `py-2.5 md:py-2` for appropriate padding
 
-2. **File list**: Optimize for touch
-   - Increase `min-h-12` for file rows (vs current ~40px)
-   - Larger font size on mobile (`text-sm` → `text-base` on mobile)
-   - Add more vertical padding
-
-3. **Graph view**: Touch-friendly controls
-   - Move zoom/fit controls to bottom-right corner
-   - Larger button sizes (`h-10 w-10` on mobile)
-   - Settings panel as a bottom sheet instead of side panel
-
-### Phase 3: Other Tabs Mobile Optimizations
+### Phase 3: ✅ Other Tabs Mobile Optimizations (COMMITTED)
 **Files**: `ChatTab.tsx`, `CompileTab.tsx`, `IngestTab.tsx`, `QualityTab.tsx`, `shared.tsx`
 
-1. **ChatTab**: 
-   - Full-width message input at bottom
-   - Larger tap targets for send/stop buttons
-   - Collapsible history rail on mobile
+1. **ChatTab**: HistoryRail hidden on mobile (`hidden md:block`), flex-col on mobile
+2. **CompileTab**: `grid-cols-1 md:grid-cols-3`, checkboxes wrap on small screens
+3. **IngestTab**: Sub-tabs scrollable on mobile (`overflow-x-auto`), PDF options stack
+4. **QualityTab**: Health check controls wrap on small screens
+5. **shared.tsx (SectionCard)**: `p-4 md:p-6` for responsive padding
 
-2. **CompileTab**:
-   - Stack model select and options vertically
-   - Full-width action buttons
-   - Larger compile output area
+### Phase 4: ✅ Viewport & Meta (COMMITTED)
+- Added `viewport` export in `layout.tsx`
+- Verified page loads with no JS errors
 
-3. **IngestTab**: 
-   - Tabbed interface for URL/path/upload modes
-   - Full-width input fields
+## Remaining Work
 
-4. **shared.tsx (SectionCard)**:
-   - Reduced padding on mobile (`p-4` instead of `p-6`)
-   - Responsive grid for two-column inputs
+### Future Enhancements (not implemented)
+- Touch action CSS on interactive elements (prevent double-tap zoom)
+- Swipe gestures between explorer files
+- Bottom sheet for graph settings panel
+- Offline PWA support
 
-### Phase 4: Mobile-Specific Enhancements
-
-1. **Viewport meta tag** — already in layout.tsx, verify
-2. **Touch action CSS** — prevent double-tap zoom on interactive elements
-3. **Mobile-friendly forms** — ensure inputs have proper `type` attributes
-4. **Gesture support** — swipe between wiki files (optional, future phase)
-
-## Implementation Order
-
-1. Create `MobileNavBar.tsx` — bottom navigation
-2. Create `MobileAppBar.tsx` — top app bar with hamburger
-3. Update `page.tsx` — integrate mobile nav, responsive layout
-4. Update `Sidebar.tsx` — drawer mode for mobile
-5. Update `ExplorerTab.tsx` — mobile toolbar and file list
-6. Update `ChatTab.tsx` — mobile chat layout
-7. Update `CompileTab.tsx`, `IngestTab.tsx`, `QualityTab.tsx` — responsive cards
-8. Update `shared.tsx` — responsive SectionCard
-9. Update `globals.css` — mobile viewport units, touch actions
-10. Test on mobile browser
-
-## Files to Create
-- `frontend/src/components/MobileNavBar.tsx`
-- `frontend/src/components/MobileAppBar.tsx`
-
-## Files to Modify
-- `frontend/src/app/page.tsx`
-- `frontend/src/components/Sidebar.tsx`
-- `frontend/src/components/ExplorerTab.tsx`
-- `frontend/src/components/ChatTab.tsx`
-- `frontend/src/components/CompileTab.tsx`
-- `frontend/src/components/IngestTab.tsx`
-- `frontend/src/components/QualityTab.tsx`
-- `frontend/src/components/shared.tsx`
-- `frontend/src/app/globals.css`
-- `frontend/tailwind.config.js` (if custom breakpoints needed)
+## Git History
+All changes committed on branch `feature/mobile-optimization`:
+- `12a2ab2` — Initial mobile optimization (Phase 1)
+- `71662e3` — Phase 1 & 2 commit
+- `dca22ab` — Phase 3: Mobile-responsive Chat, Compile, Ingest tabs
+- `254711b` — Phase 4: Mobile-responsive QualityTab
+- `e36cf0d` — Add mobile viewport meta for proper mobile rendering
