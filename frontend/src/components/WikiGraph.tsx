@@ -786,7 +786,7 @@ export function WikiGraph({ files, graph, selectedRel, filter, onSelect, onDesel
       {/* Settings panel */}
       <div className={`absolute top-2 left-2 z-10 ${empty ? "hidden" : ""}`}>
         {settingsOpen ? (
-          <div className="w-56 max-h-[calc(100%-1rem)] overflow-y-auto bg-zinc-900/85 backdrop-blur border border-white/10 rounded-lg shadow-xl p-3 space-y-3">
+          <div className="w-56 max-h-[calc(100%-1rem)] overflow-y-auto bg-zinc-900/85 backdrop-blur border border-white/10 rounded shadow-xl p-3 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-wider text-violet-300/80 font-semibold">
                 Graph settings
@@ -894,7 +894,7 @@ export function WikiGraph({ files, graph, selectedRel, filter, onSelect, onDesel
         ) : (
           <button
             onClick={() => setSettingsOpen(true)}
-            className={`p-1.5 rounded-lg ${chrome}`}
+            className={`p-1.5 rounded ${chrome}`}
             title="Graph settings"
             aria-label="Open graph settings"
           >
@@ -907,7 +907,7 @@ export function WikiGraph({ files, graph, selectedRel, filter, onSelect, onDesel
       <div className={`absolute bottom-2 right-2 z-10 flex flex-col gap-1 ${empty ? "hidden" : ""}`}>
         <button
           onClick={() => zoomBy(1.3)}
-          className={`p-1.5 rounded-lg ${chrome}`}
+          className={`p-1.5 rounded ${chrome}`}
           title="Zoom in"
           aria-label="Zoom in"
         >
@@ -915,7 +915,7 @@ export function WikiGraph({ files, graph, selectedRel, filter, onSelect, onDesel
         </button>
         <button
           onClick={() => zoomBy(1 / 1.3)}
-          className={`p-1.5 rounded-lg ${chrome}`}
+          className={`p-1.5 rounded ${chrome}`}
           title="Zoom out"
           aria-label="Zoom out"
         >
@@ -923,7 +923,7 @@ export function WikiGraph({ files, graph, selectedRel, filter, onSelect, onDesel
         </button>
         <button
           onClick={() => fitView()}
-          className={`p-1.5 rounded-lg ${chrome}`}
+          className={`p-1.5 rounded ${chrome}`}
           title="Fit to view"
           aria-label="Fit graph to view"
         >

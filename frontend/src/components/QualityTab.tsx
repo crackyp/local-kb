@@ -79,7 +79,7 @@ export function QualityTab() {
 
       {healthResult?.report && (
         <SectionCard title="Health Check Report">
-          <div className="prose prose-zinc prose-sm max-w-none bg-zinc-50 rounded-lg p-4 transition-colors duration-150 ease-out">
+          <div className="prose prose-zinc prose-sm max-w-none bg-zinc-50 rounded p-4 transition-colors duration-150 ease-out">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{healthResult.report}</ReactMarkdown>
           </div>
         </SectionCard>

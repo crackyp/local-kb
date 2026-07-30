@@ -67,7 +67,7 @@ export function ChatTab() {
             <button
               onClick={newChat}
               disabled={activeId === null}
-              className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors duration-150 ease-out flex items-center gap-1.5"
+              className="px-3 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded text-sm font-medium disabled:opacity-50 transition-colors duration-150 ease-out flex items-center gap-1.5"
             >
               <Plus className="w-3.5 h-3.5" />
               New chat
@@ -86,7 +86,7 @@ export function ChatTab() {
 
           <div
             ref={scrollRef}
-            className="flex-1 min-w-0 overflow-y-auto bg-zinc-50 rounded-lg p-3 space-y-3 border border-zinc-200"
+            className="flex-1 min-w-0 overflow-y-auto bg-zinc-50 rounded p-3 space-y-3 border border-zinc-200"
           >
             {messages.length === 0 && !streamingHere && (
               <div className="flex flex-col items-center justify-center h-full text-center py-8">
@@ -98,7 +98,7 @@ export function ChatTab() {
                       key={prompt}
                       onClick={() => setInput(prompt)}
                       disabled={loading || !model}
-                      className="text-left px-3 py-2 bg-white border border-zinc-200 rounded-lg text-xs text-zinc-600 hover:border-violet-300 hover:text-violet-700 hover:bg-violet-50 disabled:opacity-50 transition-colors duration-150 ease-out"
+                      className="text-left px-3 py-2 bg-white border border-zinc-200 rounded text-xs text-zinc-600 hover:border-violet-300 hover:text-violet-700 hover:bg-violet-50 disabled:opacity-50 transition-colors duration-150 ease-out"
                     >
                       <Sparkles className="w-3 h-3 inline mr-1 text-zinc-400" />
                       {prompt}
@@ -129,13 +129,13 @@ export function ChatTab() {
         </div>
 
         {error && (
-          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
             {error}
           </div>
         )}
 
         {loading && !streamingHere && (
-          <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
             A reply is still coming in on another conversation.
           </div>
         )}
@@ -152,12 +152,12 @@ export function ChatTab() {
             }}
             placeholder="Ask the agent anything about this project…"
             rows={2}
-            className="flex-1 px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors duration-150 ease-out"
+            className="flex-1 px-3 py-2 border border-zinc-300 rounded text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors duration-150 ease-out"
           />
           {loading ? (
             <button
               onClick={stop}
-              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out flex items-center gap-1.5"
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium transition-colors duration-150 ease-out flex items-center gap-1.5"
             >
               <Square className="w-3.5 h-3.5" />
               Stop
@@ -166,7 +166,7 @@ export function ChatTab() {
             <button
               onClick={handleSend}
               disabled={!input.trim() || !model}
-              className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-colors duration-150 ease-out flex items-center gap-1.5"
+              className="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded text-sm font-medium disabled:opacity-50 transition-colors duration-150 ease-out flex items-center gap-1.5"
             >
               <Send className="w-3.5 h-3.5" />
               Send
@@ -214,7 +214,7 @@ function HistoryRail({
   }
 
   return (
-    <div className="w-52 shrink-0 overflow-y-auto bg-zinc-50 rounded-lg border border-zinc-200 p-2 space-y-3">
+    <div className="w-52 shrink-0 overflow-y-auto bg-zinc-50 rounded border border-zinc-200 p-2 space-y-3">
       {conversations.length === 0 && (
         <p className="text-xs text-zinc-400 text-center py-4">No saved chats yet</p>
       )}
@@ -231,7 +231,7 @@ function HistoryRail({
               return (
                 <div
                   key={c.id}
-                  className={`group flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs transition-colors duration-150 ease-out ${
+                  className={`group flex items-center gap-1 rounded px-2 py-1.5 text-xs transition-colors duration-150 ease-out ${
                     isActive
                       ? "bg-violet-100 text-violet-900"
                       : "text-zinc-600 hover:bg-zinc-200/70"
@@ -291,7 +291,7 @@ function MessageBubble({ msg }: { msg: ChatUiMessage }) {
   if (msg.role === "user") {
     return (
       <div className="flex justify-end">
-        <div className="max-w-[80%] bg-violet-600 text-white px-3 py-2 rounded-lg text-sm whitespace-pre-wrap transition-colors duration-150 ease-out">
+        <div className="max-w-[80%] bg-violet-600 text-white px-3 py-2 rounded text-sm whitespace-pre-wrap transition-colors duration-150 ease-out">
           {msg.content}
         </div>
       </div>
@@ -302,7 +302,7 @@ function MessageBubble({ msg }: { msg: ChatUiMessage }) {
       {msg.tools?.map((t, i) => (
         <ToolBlock key={i} tool={t} />
       ))}
-      <div className="max-w-[90%] bg-white border border-zinc-200 px-3 py-2 rounded-lg text-sm prose prose-zinc prose-sm max-w-none transition-colors duration-150 ease-out">
+      <div className="max-w-[90%] bg-white border border-zinc-200 px-3 py-2 rounded text-sm prose prose-zinc prose-sm max-w-none transition-colors duration-150 ease-out">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
       </div>
     </div>
@@ -312,7 +312,7 @@ function MessageBubble({ msg }: { msg: ChatUiMessage }) {
 function ToolBlock({ tool }: { tool: ChatToolEvent }) {
   const argsStr = tool.args ? JSON.stringify(tool.args) : "";
   return (
-    <details className="bg-amber-50 border border-amber-200 rounded-lg text-xs transition-colors duration-150 ease-out">
+    <details className="bg-amber-50 border border-amber-200 rounded text-xs transition-colors duration-150 ease-out">
       <summary className="px-3 py-1.5 cursor-pointer font-mono text-amber-900">
         {tool.name}
         {argsStr && <span className="text-amber-700">({argsStr.slice(0, 120)}{argsStr.length > 120 ? "…" : ""})</span>}

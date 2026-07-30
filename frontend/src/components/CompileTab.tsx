@@ -59,7 +59,7 @@ export function CompileTab() {
           <ModelSelect value={model} />
           <div>
             <label className="text-xs text-zinc-500">Max source chars</label>
-            <select value={maxChars} onChange={(e) => setMaxChars(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 border border-zinc-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors duration-150 ease-out">
+            <select value={maxChars} onChange={(e) => setMaxChars(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 border border-zinc-300 rounded text-sm bg-white focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors duration-150 ease-out">
               <option value={32000}>32K</option>
               <option value={55000}>55K</option>
               <option value={100000}>100K</option>
@@ -82,7 +82,7 @@ export function CompileTab() {
           {compiling && (
             <button
               onClick={stopCompile}
-              className="ml-3 px-4 py-2 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors duration-150 ease-out"
+              className="ml-3 px-4 py-2 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors duration-150 ease-out"
             >
               Stop Compile
             </button>
@@ -103,7 +103,7 @@ export function CompileTab() {
       </SectionCard>
 
       {compiling && liveLines.length > 0 && (
-        <div className="bg-zinc-800 rounded-xl p-4 transition-colors duration-150 ease-out">
+        <div className="bg-zinc-800 rounded p-4 transition-colors duration-150 ease-out">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-violet-400 text-sm animate-pulse">Compiling...</span>
           </div>

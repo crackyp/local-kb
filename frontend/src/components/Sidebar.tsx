@@ -99,7 +99,7 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
           <button
             key={item.id}
             onClick={() => onNavigate(item.id)}
-            className={`flex items-center gap-2 w-full rounded-lg text-sm font-medium transition-colors duration-150 ease-out mb-0.5 ${
+            className={`flex items-center gap-2 w-full rounded text-sm font-medium transition-colors duration-150 ease-out mb-0.5 ${
               activeView === item.id
                 ? "bg-violet-600 text-white"
                 : "text-zinc-300 hover:bg-zinc-800 hover:text-white"
@@ -115,7 +115,7 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
       {!collapsed && (
         <div className="p-4 flex-1 overflow-y-auto space-y-3">
           {/* Compact status pills */}
-          <div className="p-3 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
+          <div className="p-3 rounded bg-zinc-800/50 border border-zinc-700/50">
             <div className="flex items-center gap-2 text-xs mb-2">
               <StatusBadge value={status?.llamacpp.running ? "running" : "not_running"} />
               {status?.llamacpp.running && loadedModel && (
@@ -148,26 +148,26 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
             )}
           </div>
 
-          <div className="p-3 rounded-lg bg-zinc-800/50 border border-zinc-700/50">
+          <div className="p-3 rounded bg-zinc-800/50 border border-zinc-700/50">
             <div className="flex items-center gap-2 text-xs">
               <StatusBadge value={status?.faiss ?? "unknown"} />
             </div>
           </div>
 
           {compiling && (
-            <div className="p-3 rounded-lg bg-violet-950/60 border border-violet-800">
+            <div className="p-3 rounded bg-violet-950/60 border border-violet-800">
               <div className="text-xs text-violet-300 uppercase tracking-wide mb-1">Compile Job</div>
               <div className="text-sm text-violet-100 mb-3">Running in background while you browse.</div>
               <div className="flex gap-2">
                 <button
                   onClick={() => onNavigate("compile")}
-                  className="flex-1 px-3 py-2 bg-violet-700 hover:bg-violet-600 rounded-lg text-sm transition-colors duration-150 ease-out"
+                  className="flex-1 px-3 py-2 bg-violet-700 hover:bg-violet-600 rounded text-sm transition-colors duration-150 ease-out"
                 >
                   Open
                 </button>
                 <button
                   onClick={stopCompile}
-                  className="px-3 py-2 bg-red-700 hover:bg-red-600 rounded-lg text-sm transition-colors duration-150 ease-out"
+                  className="px-3 py-2 bg-red-700 hover:bg-red-600 rounded text-sm transition-colors duration-150 ease-out"
                 >
                   Stop
                 </button>
@@ -195,7 +195,7 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
       <div className="p-3 border-t border-zinc-700">
         <button
           onClick={refresh}
-          className={`w-full px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors duration-150 ease-out ${collapsed ? "py-3" : ""}`}
+          className={`w-full px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded text-sm transition-colors duration-150 ease-out ${collapsed ? "py-3" : ""}`}
           title="Refresh status"
         >
           {collapsed ? <RotateCcw className="w-4 h-4 mx-auto" /> : "Refresh"}

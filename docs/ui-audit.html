@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UI Audit — Knowledge Base</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #09090b;
+    --surface: #111114;
+    --surface-2: #18181b;
+    --surface-3: #1e1e22;
+    --border: #27272a;
+    --border-light: #2a2a2e;
+    --text: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-tertiary: #52525b;
+    --accent: #7c3aed;
+    --accent-light: #8b5cf6;
+    --accent-bg: rgba(124,58,237,.1);
+    --accent-border: rgba(124,58,237,.2);
+    --red: #f43f5e;
+    --red-bg: rgba(244,63,94,.08);
+    --red-border: rgba(244,63,94,.2);
+    --amber: #f59e0b;
+    --amber-bg: rgba(245,158,11,.08);
+    --amber-border: rgba(245,158,11,.2);
+    --green: #10b981;
+    --green-bg: rgba(16,185,129,.08);
+    --green-border: rgba(16,185,129,.2);
+    --blue: #3b82f6;
+    --blue-bg: rgba(59,130,246,.08);
+    --blue-border: rgba(59,130,246,.2);
+    --radius: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .container {
+    max-width: 896px;
+    margin: 0 auto;
+    padding: 64px 32px 120px;
+  }
+
+  /* ── Header ───────────────────────────── */
+  .header {
+    margin-bottom: 64px;
+    padding-bottom: 40px;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    color: var(--accent-light);
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-border);
+    padding: 4px 12px;
+    border-radius: 99px;
+    margin-bottom: 20px;
+    transition: all .15s ease;
+  }
+  .badge:hover { background: rgba(124,58,237,.16); }
+  .badge .pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent-light);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .4; }
+  }
+  .header h1 {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -.03em;
+    line-height: 1.2;
+    color: var(--text);
+    margin-bottom: 12px;
+  }
+  .header .subtitle {
+    font-size: 16px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    max-width: 560px;
+  }
+  .meta-row {
+    display: flex;
+    gap: 24px;
+    margin-top: 24px;
+    font-size: 13px;
+    color: var(--text-tertiary);
+  }
+  .meta-row span { display: flex; align-items: center; gap: 8px; }
+  .meta-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--text-tertiary);
+  }
+
+  /* ── Sections ─────────────────────────── */
+  section { margin-bottom: 72px; }
+  section h2 {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -.02em;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  section h2 .emoji { margin-right: 8px; }
+  section .section-desc {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+    max-width: 600px;
+  }
+
+  /* ── Cards ────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 28px 32px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .card:hover {
+    border-color: var(--border-light);
+    box-shadow: 0 0 0 1px var(--border-light);
+  }
+
+  /* ── Verdict Box ──────────────────────── */
+  .verdict {
+    background: linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    padding: 36px 40px;
+    margin-bottom: 72px;
+    position: relative;
+    overflow: hidden;
+  }
+  .verdict::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent-light), transparent);
+    opacity: .5;
+  }
+  .verdict-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--accent-light);
+    margin-bottom: 16px;
+  }
+  .verdict p {
+    font-size: 15px;
+    color: var(--text-secondary);
+    line-height: 1.75;
+    max-width: 640px;
+  }
+  .verdict strong { color: var(--text); font-weight: 500; }
+  .verdict em { color: var(--accent-light); font-style: normal; }
+
+  /* ── Dimension Analysis ───────────────── */
+  .dimension {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+  .dimension-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 24px 28px;
+    transition: all .15s ease;
+  }
+  .dimension-card:hover {
+    border-color: var(--border-light);
+  }
+  .dimension-card .label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 8px;
+  }
+  .dimension-card .value {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .dimension-card .detail {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .dimension-card .tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-top: 8px;
+  }
+  .tag.generic { background: var(--blue-bg); color: var(--blue); }
+  .tag.default { background: var(--amber-bg); color: var(--amber); }
+  .tag.missing { background: var(--red-bg); color: var(--red); }
+
+  /* ── SaaS Comparison Table ────────────── */
+  .comparison {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    margin-top: 32px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  thead { background: var(--surface-2); }
+  th {
+    text-align: left;
+    padding: 14px 20px;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    border-bottom: 1px solid var(--border);
+  }
+  th:first-child { padding-left: 28px; }
+  td {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+  td:first-child {
+    font-weight: 600;
+    color: var(--text);
+    padding-left: 28px;
+  }
+  tr:last-child td { border-bottom: none; }
+  .cell-current {
+    color: var(--amber);
+    font-style: italic;
+  }
+  .cell-target {
+    color: var(--green);
+  }
+
+  /* ── Roadmap ──────────────────────────── */
+  .roadmap { counter-reset: step; }
+  .step {
+    display: flex;
+    gap: 20px;
+    padding: 24px 0;
+    border-bottom: 1px solid var(--border);
+    transition: all .15s ease;
+  }
+  .step:last-child { border-bottom: none; }
+  .step:hover { padding-left: 8px; }
+  .step::before {
+    counter-increment: step;
+    content: counter(step, decimal-leading-zero);
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-tertiary);
+    transition: all .15s ease;
+  }
+  .step:hover::before {
+    background: var(--accent-bg);
+    border-color: var(--accent-border);
+    color: var(--accent-light);
+  }
+  .step-content { flex: 1; }
+  .step-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+    letter-spacing: -.01em;
+  }
+  .step-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+  .step-meta {
+    display: flex;
+    gap: 16px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+  }
+  .step-meta span { display: flex; align-items: center; gap: 4px; }
+
+  /* ── Before/After Code Blocks ─────────── */
+  .code-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin: 12px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    line-height: 1.7;
+    overflow-x: auto;
+    color: var(--text-secondary);
+  }
+  .code-block .before { color: var(--red); }
+  .code-block .after { color: var(--green); }
+  .code-block .dim { color: var(--text-tertiary); }
+
+  /* ── Color Swatches ───────────────────── */
+  .swatch-row {
+    display: flex;
+    gap: 12px;
+    margin: 16px 0;
+    flex-wrap: wrap;
+  }
+  .swatch {
+    width: 48px; height: 48px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    position: relative;
+    transition: transform .15s ease;
+  }
+  .swatch:hover { transform: scale(1.1); }
+  .swatch-label {
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Screenshots ──────────────────────── */
+  .screenshots {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+    margin-top: 24px;
+  }
+  .shot {
+    border-radius: var(--radius);
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    transition: all .15s ease;
+  }
+  .shot:hover {
+    border-color: var(--border-light);
+    transform: translateY(-2px);
+  }
+  .shot img {
+    width: 100%;
+    display: block;
+  }
+  .shot-label {
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+  }
+
+  /* ── Divider ──────────────────────────── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 48px 0;
+  }
+
+  /* ── Responsive ───────────────────────── */
+  @media (max-width: 768px) {
+    .container { padding: 32px 20px 80px; }
+    .dimension { grid-template-columns: 1fr; }
+    .header h1 { font-size: 24px; }
+    .verdict { padding: 24px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="badge"><span class="pulse"></span> Design Audit</div>
+    <h1>Knowledge Base<br>UI Audit &amp; Design System</h1>
+    <p class="subtitle">
+      A design-system-level critique comparing the current UI against leading SaaS products
+      — Linear, Notion, Obsidian, Vercel — with a concrete roadmap to close the gap.
+    </p>
+    <div class="meta-row">
+      <span><span class="meta-dot"></span>Playwright headless inspection</span>
+      <span><span class="meta-dot"></span>8 screenshots captured</span>
+      <span><span class="meta-dot"></span>20 findings</span>
+    </div>
+  </div>
+
+  <!-- Verdict -->
+  <div class="verdict">
+    <div class="verdict-label">Executive Summary</div>
+    <p>
+      The app is <strong>structurally sound but visually generic</strong>. The layout, component
+      architecture, and UX patterns are all competent. The gap between this and a "leading SaaS"
+      is entirely in <em>design system intentionality</em>: custom color, typographic hierarchy,
+      consistent icon treatment, micro-animations, and empty-state design.
+      <br><br>
+      The current palette is <strong>unmistakably default Tailwind</strong> — <code>slate-100</code>
+      background, <code>blue-600</strong> accent, <code>slate-900</code> sidebar, <code>rounded-xl</code>
+      cards. Every SaaS app launched from <code>create-next-app</code> in the last two years looks
+      identical. There is zero brand signal.
+      <br><br>
+      The fastest path to a premium feel is <em>not</em> a redesign — it's swapping five design tokens
+      and adding a transition system. Estimated effort: <strong>2–3 hours</strong>.
+    </p>
+  </div>
+
+  <!-- Dimension Analysis -->
+  <section>
+    <h2><span class="emoji">🔬</span> Design System Audit</h2>
+    <p class="section-desc">
+      Six dimensions evaluated against the leading SaaS tier. Each dimension includes what's current,
+      what the target looks like, and the gap.
+    </p>
+
+    <div class="dimension">
+      <div class="dimension-card">
+        <div class="label">Typography</div>
+        <div class="value">Geist Sans — default, no hierarchy</div>
+        <div class="detail">
+          Next.js's default font. Competent but invisible. No tight tracking on headings,
+          no weight differentiation between levels, no custom type scale.
+        </div>
+        <span class="tag default">Default</span>
+      </div>
+      <div class="dimension-card">
+        <div class="label">Target</div>
+        <div class="value">Inter, tracking-tight on headings</div>
+        <div class="detail">
+          Linear uses tighter letter-spacing (−0.02em) on headings for a "sharp" feel.
+          Notion pairs sans-serif body with serif headings for personality.
+        </div>
+        <span class="tag generic">Gap: 15 min</span>
+      </div>
+    </div>
+
+    <div class="dimension">
+      <div class="dimension-card">
+        <div class="label">Color</div>
+        <div class="value">Tailwind defaults — slate + blue-600</div>
+        <div class="detail">
+          <code>bg-slate-100</code> page, <code>bg-slate-900</code> sidebar,
+          <code>bg-blue-600</code> accent. The most common SaaS palette in existence.
+          Could be swapped into any admin dashboard.
+        </div>
+        <span class="tag default">Default</span>
+      </div>
+      <div class="dimension-card">
+        <div class="label">Target</div>
+        <div class="value">Custom brand color + warm neutrals</div>
+        <div class="detail">
+          Linear: custom purple <code>#5E6AD2</code>. Notion: warm grays <code>#F7F6F3</code>.
+          Obsidian: deep charcoal + violet accent. Even shifting to <code>indigo-600</code>
+          or <code>violet-600</code> would signal intentionality.
+        </div>
+        <span class="tag generic">Gap: 5 min</span>
+      </div>
+    </div>
+
+    <div class="dimension">
+      <div class="dimension-card">
+        <div class="label">Icons</div>
+        <div class="value">System emoji — OS-dependent, inconsistent</div>
+        <div class="detail">
+          <code>📂 💬 ℹ️ ⚙️ ✅</code> render differently on Windows vs macOS.
+          Signal "side project" immediately. No stroke weight consistency, no grid alignment.
+        </div>
+        <span class="tag missing">Missing</span>
+      </div>
+      <div class="dimension-card">
+        <div class="label">Target</div>
+        <div class="value">Lucide React — 2px stroke, matched to font</div>
+        <div class="detail">
+          Every professional product uses a consistent icon library. Lucide is the modern
+          standard: 24×24 grid, 2px stroke, matches Inter/Geist weight perfectly.
+        </div>
+        <span class="tag generic">Gap: 30 min</span>
+      </div>
+    </div>
+
+    <div class="dimension">
+      <div class="dimension-card">
+        <div class="label">Shapes</div>
+        <div class="value">rounded-xl cards, rounded-lg buttons</div>
+        <div class="detail">
+          Generous border radii (12px/8px) lean "friendly SaaS" but without personality
+          to back them up. <code>shadow-sm</code> is barely visible — cards are in a gray zone
+          between "has shadow" and "no shadow."
+        </div>
+        <span class="tag generic">Fine, undifferentiated</span>
+      </div>
+      <div class="dimension-card">
+        <div class="label">Target</div>
+        <div class="value">Consistent radius scale + visible borders</div>
+        <div class="detail">
+          Linear: <code>rounded-md</code> (6px) for sharpness. Or go larger but pair with
+          custom illustrations. Cards should either have a visible border or a clear shadow —
+          not both at minimum opacity.
+        </div>
+        <span class="tag generic">Gap: 10 min</span>
+      </div>
+    </div>
+
+    <div class="dimension">
+      <div class="dimension-card">
+        <div class="label">Empty States</div>
+        <div class="value">Emoji + text, no guidance</div>
+        <div class="detail">
+          Explorer's right panel: a folder emoji and "Select a file to preview."
+          Chat: placeholder text buried in the textarea. Wasted screen real estate.
+        </div>
+        <span class="tag missing">Missing</span>
+      </div>
+      <div class="dimension-card">
+        <div class="label">Target</div>
+        <div class="value">Illustration + copy + CTA button</div>
+        <div class="detail">
+          Notion: screenshot + copy + CTA. Linear: subtle illustration + next action.
+          Obsidian: ASCII art + context. At minimum: icon + helpful copy + one CTA button.
+        </div>
+        <span class="tag generic">Gap: 30 min</span>
+      </div>
+    </div>
+
+    <div class="dimension">
+      <div class="dimension-card">
+        <div class="label">Motion</div>
+        <div class="value">None — content appears instantly</div>
+        <div class="detail">
+          No transitions on hover, tab switching, or content loading. Feels static.
+        </div>
+        <span class="tag missing">Missing</span>
+      </div>
+      <div class="dimension-card">
+        <div class="label">Target</div>
+        <div class="value">150ms ease-out on everything interactive</div>
+        <div class="detail">
+          Linear: 150ms ease-out on hover, spring animations on modals.
+          Notion: subtle fade on content load. Even <code>transition-colors duration-150</code>
+          on buttons and cards makes a visible difference.
+        </div>
+        <span class="tag generic">Gap: 20 min</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SaaS Comparison -->
+  <section>
+    <h2><span class="emoji">📊</span> Leading SaaS Comparison</h2>
+    <p class="section-desc">
+      How this app stacks up across six dimensions against products known for design quality.
+    </p>
+    <div class="comparison">
+      <table>
+        <thead>
+          <tr>
+            <th>Dimension</th>
+            <th>This App</th>
+            <th>Linear</th>
+            <th>Notion</th>
+            <th>Obsidian</th>
+            <th>Vercel</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Typography</td>
+            <td class="cell-current">Default Geist, no hierarchy</td>
+            <td class="cell-target">Inter, tight tracking, deliberate weights</td>
+            <td class="cell-target">Custom serif headings, warm body</td>
+            <td class="cell-target">JetBrains Mono, technical</td>
+            <td class="cell-target">Geist + tight tracking + heavy weights</td>
+          </tr>
+          <tr>
+            <td>Color</td>
+            <td class="cell-current">Tailwind slate + blue-600</td>
+            <td class="cell-target">Custom purple #5E6AD2</td>
+            <td class="cell-target">Warm grays #F7F6F3</td>
+            <td class="cell-target">Deep charcoal + violet accent</td>
+            <td class="cell-target">Zinc + white, minimal color</td>
+          </tr>
+          <tr>
+            <td>Icons</td>
+            <td class="cell-current">System emoji</td>
+            <td class="cell-target">Custom SVG, 1.5px stroke</td>
+            <td class="cell-target">Custom illustrated icons</td>
+            <td class="cell-target">Consistent line icons</td>
+            <td class="cell-target">Custom geometric SVG</td>
+          </tr>
+          <tr>
+            <td>Cards</td>
+            <td class="cell-current">shadow-sm + border, identical</td>
+            <td class="cell-target">No border, subtle bg shift</td>
+            <td class="cell-target">No card chrome, full-width</td>
+            <td class="cell-target">Minimal, no card chrome</td>
+            <td class="cell-target">Zinc border, sharp corners</td>
+          </tr>
+          <tr>
+            <td>Empty States</td>
+            <td class="cell-current">Emoji + text</td>
+            <td class="cell-target">Illustration + copy + CTA</td>
+            <td class="cell-target">Screenshot + copy + CTA</td>
+            <td class="cell-target">ASCII art + copy</td>
+            <td class="cell-target">Clean text + CTA</td>
+          </tr>
+          <tr>
+            <td>Motion</td>
+            <td class="cell-current">None</td>
+            <td class="cell-target">150ms ease-out everywhere</td>
+            <td class="cell-target">Subtle fade, spring animations</td>
+            <td class="cell-target">Minimal (terminal feel)</td>
+            <td class="cell-target">Spring-based, generous</td>
+          </tr>
+          <tr>
+            <td><strong>Overall</strong></td>
+            <td class="cell-current"><strong>Competent, generic</strong></td>
+            <td class="cell-target"><strong>Sharp, premium</strong></td>
+            <td class="cell-target"><strong>Warm, editorial</strong></td>
+            <td class="cell-target"><strong>Technical, dense</strong></td>
+            <td class="cell-target"><strong>Clean, minimal</strong></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Critical Issues -->
+  <section>
+    <h2><span class="emoji">🔴</span> Critical Issues</h2>
+    <p class="section-desc">
+      Broken or misleading elements that undermine credibility immediately.
+    </p>
+
+    <div class="step">
+      <div class="step-content">
+        <div class="step-title">App title is "Knowledge Based" — should be "Knowledge Base"</div>
+        <div class="step-desc">Visible in the sidebar header on every screen. A typo that fires first. Fix in <code>layout.tsx</code> metadata and <code>Sidebar.tsx</code> heading.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-content">
+        <div class="step-title">Subtitle reads "The Knowledge Mutilator"</div>
+        <div class="step-desc">Appears below the app title. For a professional tool this reads as an accidental autocomplete. Replace with "Personal Knowledge Base" or remove.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-content">
+        <div class="step-title">Model input renders as a blank white box</div>
+        <div class="step-desc">When no models are loaded the selector shows an empty white rectangle with no placeholder and no disabled state. Looks like a rendering error. Show "No models available" or disable with muted appearance.</div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-content">
+        <div class="step-title">File counters show (0) in Explorer tabs</div>
+        <div class="step-desc">Wiki (0), Raw (0), Outputs (0) — the zero badges look like bugs rather than empty-state indicators. Omit the counter when zero or use a more subtle style.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Roadmap -->
+  <section>
+    <h2><span class="emoji">🗺️</span> Roadmap to Leading SaaS Tier</h2>
+    <p class="section-desc">
+      Ten steps, ordered by impact-to-effort ratio. Total estimated effort: ~3 hours.
+      Each step is a surgical change — no refactoring, no rearchitecture.
+    </p>
+
+    <div class="roadmap">
+      <div class="step">
+        <div class="step-content">
+          <div class="step-title">Pick a brand color</div>
+          <div class="step-desc">
+            Replace <code>blue-600</code> with <code>violet-600</code> or <code>indigo-600</code> everywhere.
+            This single swap — buttons, active nav, accents — is the cheapest signal of "intentional design."
+            Custom hex like <code>#7C3AED</code> would be even better.
+          </div>
+          <div class="step-meta">
+            <span>⏱ 5 min</span>
+            <span>📈 Highest impact</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-content">
+          <div class="step-title">Warm up or cool down the grays</div>
+          <div class="step-desc">
+            Swap <code>slate</code> for <code>zinc</code> (cooler, more technical like Vercel) or
+            use warm custom neutrals like Notion (<code>#F7F6F3</code>). The current <code>slate-100</code>
+            is the most recognizable "I used Tailwind defaults" signal.
+          </div>
+          <div class="step-meta">
+            <span>⏱ 5 min</span>
+            <span>📈 Visual tone shift</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-content">
+          <div class="step-title">Replace emoji icons with Lucide React</div>
+          <div class="step-desc">
+            <code>npm i lucide-react</code>, then swap <code>📂</code> → <code>&lt;FolderOpen /&gt;</code>,
+            <code>💬</code> → <code>&lt;MessageSquare /&gt;</code>, etc. Consistent 2px stroke,
+            24×24 grid, matched to Inter weight. Immediate professionalism upgrade.
+          </div>
+          <div class="step-meta">
+            <span>⏱ 30 min</span>
+            <span>📈 Professionalism</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-content">
+          <div class="step-title">Add typographic hierarchy</div>
+          <div class="step-desc">
+            Add <code>tracking-tight</code> to all <code>&lt;h1&gt;</code>–<code>&lt;h3&gt;</code> headings.
+            Increase weight contrast: headings <code>font-semibold</code>, labels <code>font-medium</code>,
+            body <code>font-normal</code>. Current state: everything is <code>font-medium</code>.
+          </div>
+          <div class="step-meta">
+            <span>⏱ 15 min</span>
+            <span>📈 Readability</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-content">
+          <div class="step-title">Add a transition system</div>
+          <div class="step-desc">
+            Add <code>transition-colors duration-150 ease-out</code> to all buttons, nav items, and
+            interactive cards. Add <code>animate-in fade-in duration-200</code> to tab content switches.
+            This is what separates "static page" from "application."
+          </div>
+          <div class="step-meta">
+            <span>⏱ 20 min</span>
+            <span>📈 Perceived quality</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-content">
+          <div class="step-title">Differentiate primary vs secondary cards</div>
+          <div class="step-desc">
+            Primary action cards (Compile, Lint, Health Check) get an accent left border
+            (<code>border-l-2 border-l-violet-500</code>) or a subtle top gradient.
+            Secondary cards stay plain. Current state: every <code>SectionCard</code> is identical.
+          </div>
+          <div class="step-meta">
+            <span>⏱ 15 min</span>
+            <span>📈 Visual hierarchy</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-content">
+          <div class="step-title">Design proper empty states</div>
+          <div class="step-desc">
+            Chat: welcome screen with suggested questions ("What do you know about…?", "Summarize your wiki").
+            Explorer right panel: recent files or quick actions instead of a lone folder emoji.
+            Explorer left panel: helpful copy + CTA instead of "No files yet."
+          </div>
+          <div class="step-meta">
+            <span>⏱ 30 min</span>
+            <span>📈 User experience</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-content">
+          <div class="step-title">Compact the sidebar status panels</div>
+          <div class="step-desc">
+            Current: "LLAMA.CPP" + status badge + model selector + FAISS panel = 200px of vertical space.
+            Target: inline pills — <code>● Running · qwen3.6-27b</code> on one line.
+            Move model selector to a top bar or keep sidebar-only as single source of truth.
+          </div>
+          <div class="step-meta">
+            <span>⏱ 30 min</span>
+            <span>📈 Screen real estate</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-content">
+          <div class="step-title">Add skeleton loaders</div>
+          <div class="step-desc">
+            Shimmer placeholders for file lists and card content during async loads.
+            Current state: content just appears. A 200ms skeleton with <code>animate-pulse</code>
+            makes the app feel responsive even when the API is slow.
+          </div>
+          <div class="step-meta">
+            <span>⏱ 45 min</span>
+            <span>📈 Perceived performance</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-content">
+          <div class="step-title">Fix the "Based" → "Base" typo + remove "Mutilator"</div>
+          <div class="step-desc">
+            Two-character fix. Credibility matters.
+          </div>
+          <div class="step-meta">
+            <span>⏱ 2 min</span>
+            <span>📈 Credibility</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Token Changes -->
+  <section>
+    <h2><span class="emoji">🎨</span> Token Changes</h2>
+    <p class="section-desc">
+      The exact design token swaps to move from "default Tailwind" to "intentional SaaS."
+    </p>
+
+    <div class="card">
+      <div class="label" style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-tertiary);margin-bottom:16px;">Color Palette — Current</div>
+      <div class="swatch-row">
+        <div class="swatch" style="background:#f1f5f9;"><span class="swatch-label">slate-100</span></div>
+        <div class="swatch" style="background:#0f172a;"><span class="swatch-label">slate-900</span></div>
+        <div class="swatch" style="background:#2563eb;"><span class="swatch-label">blue-600</span></div>
+        <div class="swatch" style="background:#ffffff;border:1px solid #e2e8f0;"><span class="swatch-label">white</span></div>
+        <div class="swatch" style="background:#e2e8f0;"><span class="swatch-label">slate-200</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <div class="label" style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-light);margin-bottom:16px;">Color Palette — Target (Violet Theme)</div>
+      <div class="swatch-row">
+        <div class="swatch" style="background:#fafafa;"><span class="swatch-label">zinc-50</span></div>
+        <div class="swatch" style="background:#09090b;"><span class="swatch-label">zinc-950</span></div>
+        <div class="swatch" style="background:#7c3aed;"><span class="swatch-label">violet-600</span></div>
+        <div class="swatch" style="background:#ffffff;border:1px solid #e4e4e7;"><span class="swatch-label">white</span></div>
+        <div class="swatch" style="background:#e4e4e7;"><span class="swatch-label">zinc-200</span></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <div class="label" style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--accent-light);margin-bottom:16px;">Color Palette — Target (Indigo Theme)</div>
+      <div class="swatch-row">
+        <div class="swatch" style="background:#fafaf9;"><span class="swatch-label">stone-50</span></div>
+        <div class="swatch" style="background:#0c0a09;"><span class="swatch-label">stone-950</span></div>
+        <div class="swatch" style="background:#4f46e5;"><span class="swatch-label">indigo-600</span></div>
+        <div class="swatch" style="background:#ffffff;border:1px solid #e7e5e4;"><span class="swatch-label">white</span></div>
+        <div class="swatch" style="background:#e7e5e4;"><span class="swatch-label">stone-200</span></div>
+      </div>
+    </div>
+
+    <div class="code-block" style="margin-top:20px;">
+      <span class="dim">/* globals.css — swap these 5 tokens */</span><br>
+      <span class="before">--background: #f1f5f9;</span> → <span class="after">--background: #fafafa;</span><br>
+      <span class="before">--sidebar: #0f172a;</span> → <span class="after">--sidebar: #09090b;</span><br>
+      <span class="before">--accent: #2563eb;</span> → <span class="after">--accent: #7c3aed;</span><br>
+      <span class="before">--border: #e2e8f0;</span> → <span class="after">--border: #e4e4e7;</span><br>
+      <span class="before">--font: 'Geist Sans';</span> → <span class="after">--font: 'Inter';</span>
+    </div>
+  </section>
+
+  <!-- Screenshots -->
+  <section>
+    <h2><span class="emoji">📸</span> Screenshots</h2>
+    <p class="section-desc">
+      Eight views captured via Playwright headless inspection.
+    </p>
+    <div class="screenshots">
+      <div class="shot">
+        <img src="screenshots/01-explorer.png" alt="Explorer tab (Wiki view)">
+        <div class="shot-label">Explorer — Wiki tab</div>
+      </div>
+      <div class="shot">
+        <img src="screenshots/02-explorer-file-selected.png" alt="Explorer with file selected">
+        <div class="shot-label">Explorer — File selected</div>
+      </div>
+      <div class="shot">
+        <img src="screenshots/03-chat.png" alt="Chat tab">
+        <div class="shot-label">Chat</div>
+      </div>
+      <div class="shot">
+        <img src="screenshots/04-ingest.png" alt="Ingest tab">
+        <div class="shot-label">Ingest</div>
+      </div>
+      <div class="shot">
+        <img src="screenshots/05-compile.png" alt="Compile tab">
+        <div class="shot-label">Compile</div>
+      </div>
+      <div class="shot">
+        <img src="screenshots/06-quality.png" alt="Quality tab">
+        <div class="shot-label">Quality</div>
+      </div>
+      <div class="shot">
+        <img src="screenshots/07-sidebar-collapsed.png" alt="Sidebar collapsed">
+        <div class="shot-label">Sidebar — Collapsed</div>
+      </div>
+      <div class="shot">
+        <img src="screenshots/08-explorer-raw.png" alt="Explorer Raw tab">
+        <div class="shot-label">Explorer — Raw tab</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

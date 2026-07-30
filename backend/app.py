@@ -268,9 +268,12 @@ app = FastAPI(title="Local KB API")
 _cors_origins = [
     f"http://{FRONTEND_HOST}:{FRONTEND_PORT}",
     f"http://127.0.0.1:{FRONTEND_PORT}",
+    f"http://localhost:{FRONTEND_PORT}",
+    f"http://100.81.79.15:{FRONTEND_PORT}",   # Tailscale IP
+    f"http://192.168.4.36:{FRONTEND_PORT}",    # Local LAN IP
 ]
-if f"http://localhost:{FRONTEND_PORT}" not in _cors_origins:
-    _cors_origins.append(f"http://localhost:{FRONTEND_PORT}")
+if "*" in os.environ.get("KB_CORS_ALLOW_ALL", "").lower():
+    _cors_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,

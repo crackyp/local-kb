@@ -18,7 +18,7 @@ export function SectionCard({
   accent?: boolean;
 }) {
   return (
-    <div className={`bg-white rounded-xl shadow-sm border border-zinc-200 p-6 ${accent ? "border-l-2 border-l-violet-500" : ""} transition-colors duration-150 ease-out`}>
+    <div className={`bg-white rounded shadow-sm border border-zinc-200 p-6 ${accent ? "border-l-2 border-l-violet-500" : ""} transition-colors duration-150 ease-out`}>
       <h2 className="text-lg font-semibold text-zinc-900 mb-2 tracking-tight">{title}</h2>
       {description && (
         <p className="text-sm text-zinc-500 mb-4">{description}</p>
@@ -39,7 +39,7 @@ export function CommandResultPanel({
 }) {
   if (!result) return null;
   return (
-    <div className="bg-zinc-800 rounded-xl p-4 transition-colors duration-150 ease-out">
+    <div className="bg-zinc-800 rounded p-4 transition-colors duration-150 ease-out">
       <div className="flex items-center gap-2 mb-2">
         {result.returncode === 0 ? (
           <span className="text-green-400 text-sm">Done</span>
@@ -80,7 +80,7 @@ export function ModelSelect({
   const current = value ?? globalModel;
   const handleChange = onChange ?? setGlobalModel;
 
-  const selectClass = `w-full mt-1 px-2 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors duration-150 ease-out ${
+  const selectClass = `w-full mt-1 px-2 py-1.5 border rounded text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors duration-150 ease-out ${
     tone === "dark"
       ? "bg-zinc-800 text-zinc-100 border-zinc-700"
       : "bg-white text-zinc-900 border-zinc-300"
@@ -143,7 +143,7 @@ export function ModelSelect({
         type="text"
         value={current}
         onChange={(e) => handleChange(e.target.value)}
-        className="w-full mt-1 px-2 py-1.5 border border-zinc-300 rounded-lg text-sm bg-zinc-50 text-zinc-400 cursor-not-allowed"
+        className="w-full mt-1 px-2 py-1.5 border border-zinc-300 rounded text-sm bg-zinc-50 text-zinc-400 cursor-not-allowed"
         placeholder="No models available"
         disabled
       />
@@ -190,7 +190,7 @@ export function RecommendationBar({
       {recommendations.map((rec, i) => (
         <div
           key={i}
-          className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg transition-colors duration-150 ease-out"
+          className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded transition-colors duration-150 ease-out"
         >
           <span className="text-sm text-amber-800">{rec.message}</span>
           {rec.action && onAction && (
@@ -233,7 +233,7 @@ export function ActionButton({
     <button
       onClick={onClick}
       disabled={loading || disabled}
-      className={`px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 ease-out ${base}`}
+      className={`px-4 py-2 rounded text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150 ease-out ${base}`}
     >
       {loading ? (loadingText ?? "Working...") : children}
     </button>
