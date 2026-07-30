@@ -67,9 +67,9 @@ export function QualityTab() {
       )}
 
       <SectionCard title="Health Check" description="LLM-powered review: find contradictions, unexplained topics, unsourced claims, and knowledge gaps.">
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
           <ModelSelect value={model} />
-          <div className="pt-5">
+          <div className="pt-5 sm:pt-0">
             <ActionButton onClick={handleHealthCheck} loading={checking} disabled={!model} loadingText="Reviewing...">
               Run Health Check
             </ActionButton>
