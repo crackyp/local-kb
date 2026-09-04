@@ -24,7 +24,7 @@ from .utils import (
 )
 from .links import resolve_page_file, wiki_link_targets
 from .index_state import wiki_page_hashes
-from .llamacpp import ping as ping_llamacpp, generate as llamacpp_generate
+from .llamacpp import ping as ping_llamacpp, generate as llamacpp_generate, resolve_provider
 from .extract import extract_pdf_text, extract_docx_text, extract_pptx_text
 from .safe_ops import soft_delete
 
@@ -529,10 +529,14 @@ def compile_documents(
     changed_pages (set), deleted_pages (list).
     """
     ensure_dirs()
-    if not ping_llamacpp():
+    try:
+        mgr, provider_name = resolve_provider(model)
+    except ValueError:
+        raise
+    if not ping_llamacpp(provider_name):
         raise RuntimeError(
             f"llama-swap is not reachable at "
-            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}. "
+            f"{mgr.host}:{mgr.port}. "
             "Start it and try again."
         )
 

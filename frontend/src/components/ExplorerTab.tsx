@@ -24,8 +24,8 @@ type WikiView = "graph" | "list";
 const CATEGORIES: Category[] = ["wiki", "raw", "outputs"];
 const CATEGORY_LABELS: Record<Category, string> = { wiki: "Wiki", raw: "Raw", outputs: "Outputs" };
 const CATEGORY_EMPTY_ACTIONS: Record<Category, { action: View; label: string }> = {
-  raw: { action: "ingest", label: "Open Ingest" },
-  wiki: { action: "compile", label: "Open Compile" },
+  raw: { action: "upload", label: "Open Upload" },
+  wiki: { action: "upload", label: "Open Upload" },
   outputs: { action: "chat", label: "Open Chat" },
 };
 const PREVIEWABLE = new Set([
@@ -796,8 +796,8 @@ export function ExplorerTab({ onNavigate }: ExplorerTabProps) {
                   <div className="text-zinc-500 font-medium mb-1">{filter ? "No matching files" : `No ${activeTab} files yet`}</div>
                   )}
                   {!filter && !active.error && <div className="text-xs text-zinc-400 mb-3">
-                    {activeTab === "raw" && "Head to the Ingest tab to add files, URLs, or PDFs."}
-                    {activeTab === "wiki" && "Compile your raw sources to generate wiki pages."}
+                    {activeTab === "raw" && "Head to the Upload tab to add files, URLs, or PDFs."}
+                    {activeTab === "wiki" && "Head to the Upload tab to compile wiki pages from your raw sources."}
                     {activeTab === "outputs" && "Ask a question or run a health check to generate output."}
                   </div>}
                   {active.error && !filter && (

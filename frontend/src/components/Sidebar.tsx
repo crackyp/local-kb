@@ -10,7 +10,6 @@ import {
   FolderOpen,
   MessageSquare,
   Upload,
-  Settings,
   CheckCircle,
   ChevronsLeft,
   ChevronsRight,
@@ -20,8 +19,7 @@ import {
 const NAV_ITEMS: { id: View; label: string; icon: string }[] = [
   { id: "explorer", label: "Explorer", icon: "FolderOpen" },
   { id: "chat", label: "Chat", icon: "MessageSquare" },
-  { id: "ingest", label: "Ingest", icon: "Upload" },
-  { id: "compile", label: "Compile", icon: "Settings" },
+  { id: "upload", label: "Upload", icon: "Upload" },
   { id: "quality", label: "Quality", icon: "CheckCircle" },
 ];
 
@@ -30,7 +28,6 @@ function NavIcon({ name }: { name: string }) {
     case "FolderOpen": return <FolderOpen className="w-4 h-4" />;
     case "MessageSquare": return <MessageSquare className="w-4 h-4" />;
     case "Upload": return <Upload className="w-4 h-4" />;
-    case "Settings": return <Settings className="w-4 h-4" />;
     case "CheckCircle": return <CheckCircle className="w-4 h-4" />;
     default: return <FolderOpen className="w-4 h-4" />;
   }
@@ -160,7 +157,7 @@ export function Sidebar({ activeView, onNavigate }: SidebarProps) {
               <div className="text-sm text-violet-100 mb-3">Running in background while you browse.</div>
               <div className="flex gap-2">
                 <button
-                  onClick={() => onNavigate("compile")}
+                  onClick={() => onNavigate("upload")}
                   className="flex-1 px-3 py-2 bg-violet-700 hover:bg-violet-600 rounded text-sm transition-colors duration-150 ease-out"
                 >
                   Open

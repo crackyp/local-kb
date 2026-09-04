@@ -17,7 +17,8 @@ interface CompileContextValue {
   compiling: boolean;
   liveLines: string[];
   result: CommandResponse | null;
-  startCompile: (data: CompileRequest) => Promise<void>;
+  /** Resolves with the final result, or undefined if a compile is already running. */
+  startCompile: (data: CompileRequest) => Promise<CommandResponse | undefined>;
   stopCompile: () => void;
 }
 
@@ -47,7 +48,7 @@ export function CompileProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const startCompile = useCallback(
-    async (data: CompileRequest) => {
+    async (data: CompileRequest): Promise<CommandResponse | undefined> => {
       if (abortRef.current) return;
 
       setCompiling(true);
@@ -55,10 +56,11 @@ export function CompileProvider({ children }: { children: ReactNode }) {
       setLiveLines([]);
       liveLinesRef.current = [];
 
+      let res: CommandResponse;
       try {
         const { promise, abort } = api.compileStream(data, pushLine);
         abortRef.current = abort;
-        const res = await promise;
+        res = await promise;
         abortRef.current = null;
         setResult(res);
         setLiveLines([]);
@@ -74,15 +76,16 @@ export function CompileProvider({ children }: { children: ReactNode }) {
           const output = liveLinesRef.current.length
             ? `${liveLinesRef.current.join("\n")}\nCompile stopped by user.`
             : "Compile stopped by user.";
-          setResult({ returncode: 130, output, command: "" });
+          res = { returncode: 130, output, command: "" };
         } else {
-          setResult({ returncode: 1, output: String(error), command: "" });
+          res = { returncode: 1, output: String(error), command: "" };
         }
         setLiveLines([]);
         liveLinesRef.current = [];
       } finally {
         setCompiling(false);
       }
+      return res;
     },
     [pushLine, refreshStatus, invalidate],
   );

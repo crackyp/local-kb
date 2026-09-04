@@ -44,6 +44,7 @@ from local_kb.llamacpp import (
     ping_any as ping_any_llamacpp,
     generate as llamacpp_generate,
     resolve_provider,
+    get_chat_manager,
 )
 from local_kb.extract import extract_pdf_text
 from local_kb.ingest import ingest_urls, format_ingest_report
@@ -575,12 +576,18 @@ async def compile_stream(data: CompileRequest):
 @app.post("/api/index")
 async def build_index(data: IndexRequest):
     ensure_dirs()
-    if not ping_llamacpp():
+    # Resolve the provider for the model (or use default) and check that server
+    model_to_use = data.model or CFG["model"]["default"]
+    try:
+        mgr, provider_name = resolve_provider(model_to_use)
+    except ValueError:
+        mgr = get_chat_manager("llamacpp")
+        provider_name = "llamacpp"
+    if not mgr.is_alive():
         _error_response(
             "LLAMACPP_NOT_RUNNING",
-            f"llama-swap (primary) is not reachable at "
-            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}. "
-            "Start it and try again.",
+            f"{provider_name} is not reachable at "
+            f"{mgr.host}:{mgr.port}. Start it and try again.",
         )
 
     try:

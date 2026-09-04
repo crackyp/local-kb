@@ -6,6 +6,7 @@ Returns True if everything looks good, False (with printed warnings) otherwise.
 """
 
 import importlib
+import json
 import os
 import socket
 import sys
@@ -108,6 +109,40 @@ def check_port_free(port: int, label: str) -> bool:
     return True
 
 
+def api_is_running(port: int) -> bool:
+    """Return True if a Local KB backend is already answering on *port*.
+
+    Probes /api/status so the launcher can reuse an instance left running by
+    a previous launch instead of failing on a port conflict (or stacking a
+    second uvicorn on top, which Windows SO_REUSEADDR allows).
+    """
+    url = f"http://127.0.0.1:{port}/api/status"
+    try:
+        with urllib.request.urlopen(url, timeout=2) as resp:
+            if resp.status != 200:
+                return False
+            data = json.loads(resp.read())
+            return isinstance(data, dict) and "faiss" in data
+    except Exception:
+        return False
+
+
+def check_api_port() -> bool:
+    """Check the backend port; a running Local KB backend counts as OK."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(1)
+        in_use = s.connect_ex(("127.0.0.1", API_PORT)) == 0
+    if not in_use:
+        _ok(f"Port {API_PORT} (api) is free")
+        return True
+    if api_is_running(API_PORT):
+        _ok(f"Port {API_PORT} (api) is served by a running Local KB backend - reusing it")
+        return True
+    _fail(f"Port {API_PORT} (api) is in use by something else — stop whatever is "
+          f"listening on it, or set KB_API_PORT to a free port")
+    return False
+
+
 def check_llamacpp() -> bool:
     """Check that the local chat server is reachable on the configured port."""
     sys.path.insert(0, str(ROOT))
@@ -145,7 +180,7 @@ def run_checks() -> bool:
     print()
 
     print("  Ports:")
-    api_ok = check_port_free(API_PORT, "api")
+    api_ok = check_api_port()
     fe_ok = check_port_free(FRONTEND_PORT, "frontend")
     print()
 

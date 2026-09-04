@@ -1,4 +1,4 @@
-export type View = "ingest" | "compile" | "chat" | "explorer" | "quality";
+export type View = "upload" | "chat" | "explorer" | "quality";
 
 export interface FileMeta {
   name: string;

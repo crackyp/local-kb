@@ -31,7 +31,7 @@ from local_kb.utils import (
     slugify, unique_path, read_text, resolve_input_patterns,
     truncate_at_sentence,
 )
-from local_kb.llamacpp import ping as ping_llamacpp, generate as llamacpp_generate
+from local_kb.llamacpp import ping as ping_llamacpp, generate as llamacpp_generate, resolve_provider
 from local_kb.extract import extract_pdf_text, extract_docx_text
 from local_kb.ingest import ingest_urls, format_ingest_report
 from local_kb.compile import compile_documents, build_wiki_index
@@ -138,10 +138,14 @@ def cmd_compile(args):
 
 def cmd_ask(args):
     ensure_dirs()
-    if not ping_llamacpp():
+    try:
+        mgr, provider_name = resolve_provider(args.model)
+    except ValueError:
+        raise
+    if not ping_llamacpp(provider_name):
         raise RuntimeError(
             f"llama-swap is not reachable at "
-            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}. "
+            f"{mgr.host}:{mgr.port}. "
             "Start it and try again."
         )
 
@@ -194,10 +198,14 @@ WIKI CONTEXT:
 
 def cmd_index(args):
     ensure_dirs()
-    if not ping_llamacpp():
+    try:
+        mgr, provider_name = resolve_provider(args.model)
+    except ValueError:
+        raise
+    if not ping_llamacpp(provider_name):
         raise RuntimeError(
             f"llama-swap is not reachable at "
-            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}. "
+            f"{mgr.host}:{mgr.port}. "
             "Start it and try again."
         )
     try:

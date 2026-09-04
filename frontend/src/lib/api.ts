@@ -1,4 +1,12 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8765";
+// Resolve the API host at runtime so the KB works from any origin that serves
+// the frontend (localhost, LAN IP, Tailscale IP). In the browser the page's own
+// hostname always wins - this avoids baking a build-time host (e.g. from
+// .env.local NEXT_PUBLIC_API_BASE) that may be unreachable from a different
+// network. The env var only serves as the SSR / non-browser default.
+const API_BASE =
+  typeof window !== "undefined"
+    ? `http://${window.location.hostname}:8765`
+    : process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8765";
 
 import type {
   StatusResponse,
@@ -82,13 +90,6 @@ export const api = {
       { method: "POST", body: form }
     );
   },
-
-  ingestPath: (paths: string[]) =>
-    request<CommandResponse>("/api/ingest/path", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paths }),
-    }),
 
   ingestUrl: (data: IngestUrlRequest) =>
     request<CommandResponse>("/api/ingest/url", {

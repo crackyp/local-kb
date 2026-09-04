@@ -40,12 +40,22 @@ def start_next():
 
 
 if __name__ == "__main__":
-    from preflight import run_checks
+    from preflight import api_is_running, run_checks
 
     if not run_checks():
         print("\nFix the issues above before starting, or press Enter to continue anyway.")
         input()
     print()
+
+    if api_is_running(int(API_PORT)):
+        # A previous launch left the backend running; reuse it instead of
+        # starting a second uvicorn on the same port.
+        print(f"\n[1/2] FastAPI backend already running on http://127.0.0.1:{API_PORT} - reusing it.")
+        try:
+            start_next()
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+        return
 
     # Non-daemon threads so Ctrl+C propagates and uvicorn/next get a chance to
     # release their listening sockets. Daemon threads get torn down hard on

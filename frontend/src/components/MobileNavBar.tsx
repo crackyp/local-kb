@@ -5,15 +5,13 @@ import {
   FolderOpen,
   MessageSquare,
   Upload,
-  Settings,
   CheckCircle,
 } from "lucide-react";
 
 const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode }[] = [
   { id: "explorer", label: "Explorer", icon: <FolderOpen className="w-5 h-5" /> },
   { id: "chat", label: "Chat", icon: <MessageSquare className="w-5 h-5" /> },
-  { id: "ingest", label: "Ingest", icon: <Upload className="w-5 h-5" /> },
-  { id: "compile", label: "Compile", icon: <Settings className="w-5 h-5" /> },
+  { id: "upload", label: "Upload", icon: <Upload className="w-5 h-5" /> },
   { id: "quality", label: "Quality", icon: <CheckCircle className="w-5 h-5" /> },
 ];
 

@@ -173,9 +173,14 @@ def resolve_provider(model: str) -> tuple[LlamaServerManager, str]:
             f"Provider '{forced_provider}' does not have model '{target_model}'."
         )
 
-    # Otherwise search all providers (first match wins)
+    # Search remote providers first, then local as fallback.
+    # This ensures models available on remote are routed there,
+    # preventing the remote server from falling back to local.
     for name, info in providers.items():
-        if target_model in info["models"]:
+        if name != "llamacpp" and target_model in info["models"]:
+            return info["manager"], name
+    for name, info in providers.items():
+        if name == "llamacpp" and target_model in info["models"]:
             return info["manager"], name
 
     raise ValueError(

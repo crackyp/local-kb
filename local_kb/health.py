@@ -6,7 +6,7 @@ from pathlib import Path
 from .config import CFG
 from .paths import WIKI, OUTPUTS, ensure_dirs
 from .utils import read_text, extract_links
-from .llamacpp import ping as ping_llamacpp, generate as llamacpp_generate
+from .llamacpp import ping as ping_llamacpp, generate as llamacpp_generate, resolve_provider
 
 
 def health_check(model: str) -> dict:
@@ -16,10 +16,14 @@ def health_check(model: str) -> dict:
     page_count (int).
     """
     ensure_dirs()
-    if not ping_llamacpp():
+    try:
+        mgr, provider_name = resolve_provider(model)
+    except ValueError:
+        raise
+    if not ping_llamacpp(provider_name):
         raise RuntimeError(
             f"llama-swap is not reachable at "
-            f"{CFG['llamacpp']['host']}:{CFG['llamacpp']['chat_port']}. "
+            f"{mgr.host}:{mgr.port}. "
             "Start it and try again."
         )
 

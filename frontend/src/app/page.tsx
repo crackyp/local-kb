@@ -8,8 +8,7 @@ import { ChatProvider } from "@/lib/ChatContext";
 import { Sidebar } from "@/components/Sidebar";
 import { MobileNavBar } from "@/components/MobileNavBar";
 import { MobileAppBar } from "@/components/MobileAppBar";
-import { IngestTab } from "@/components/IngestTab";
-import { CompileTab } from "@/components/CompileTab";
+import { UploadTab } from "@/components/UploadTab";
 import { ChatTab } from "@/components/ChatTab";
 import { ExplorerTab } from "@/components/ExplorerTab";
 import { QualityTab } from "@/components/QualityTab";
@@ -17,8 +16,7 @@ import { QualityTab } from "@/components/QualityTab";
 const VIEW_TITLES: Record<View, string> = {
   explorer: "Explorer",
   chat: "Chat",
-  ingest: "Ingest",
-  compile: "Compile",
+  upload: "Upload",
   quality: "Quality",
 };
 
@@ -82,8 +80,7 @@ export default function HomePage() {
                 }
               >
                 <div key={activeView} className="animate-in fade-in duration-200">
-                  {activeView === "ingest" && <IngestTab />}
-                  {activeView === "compile" && <CompileTab />}
+                  {activeView === "upload" && <UploadTab />}
                   {activeView === "chat" && <ChatTab />}
                   {activeView === "explorer" && <ExplorerTab onNavigate={setActiveView} />}
                   {activeView === "quality" && <QualityTab />}

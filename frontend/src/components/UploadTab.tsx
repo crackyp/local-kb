@@ -3,8 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useStatus } from "@/lib/StatusContext";
+import { useCompile } from "@/lib/CompileContext";
 import type { CommandResponse } from "@/types";
-import { CommandResultPanel, ActionButton } from "@/components/shared";
+import {
+  SectionCard,
+  ModelSelect,
+  CommandResultPanel,
+  RecommendationBar,
+  ActionButton,
+} from "@/components/shared";
 import { Upload, Globe, FileText } from "lucide-react";
 
 type IngestMode = "files" | "url" | "pdf";
@@ -15,12 +22,12 @@ const SUB_TABS: { id: IngestMode; label: string; icon: string }[] = [
   { id: "pdf", label: "PDF", icon: "FileText" },
 ];
 
-export function IngestTab() {
-  const { refresh: refreshStatus } = useStatus();
+export function UploadTab() {
+  const { model, refresh: refreshStatus, invalidate } = useStatus();
+  const { compiling, liveLines: compileLines, result: compileResult, startCompile, stopCompile } = useCompile();
   const [mode, setMode] = useState<IngestMode>("files");
 
   // Files state
-  const [paths, setPaths] = useState("");
   const [uploadFiles, setUploadFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
 
@@ -42,17 +49,30 @@ export function IngestTab() {
   const [pdfMaxPages, setPdfMaxPages] = useState(0);
   const [copyOriginal, setCopyOriginal] = useState(false);
 
+  // Compile state
+  const [force, setForce] = useState(false);
+  const [maxChars, setMaxChars] = useState(524288);
+  const [idxForce, setIdxForce] = useState(false);
+  const [indexing, setIndexing] = useState(false);
+
   const [result, setResult] = useState<CommandResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [urlFetching, setUrlFetching] = useState(false);
   const [liveLines, setLiveLines] = useState<string[]>([]);
   const liveRef = useRef<HTMLPreElement>(null);
+  const compileLiveRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
     if (liveRef.current) {
       liveRef.current.scrollTop = liveRef.current.scrollHeight;
     }
   }, [liveLines]);
+
+  useEffect(() => {
+    if (compileLiveRef.current) {
+      compileLiveRef.current.scrollTop = compileLiveRef.current.scrollHeight;
+    }
+  }, [compileLines]);
 
   const addFiles = (files: File[]) => {
     setUploadFiles((prev) => {
@@ -89,22 +109,8 @@ export function IngestTab() {
     e.preventDefault();
     setDragging(false);
     const files = Array.from(e.dataTransfer.files);
-    if (files.length) {
-      addFiles(files);
-    } else {
-      const text = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text");
-      if (text?.trim()) {
-        setPaths((prev) => (prev ? prev + "\n" + text.trim() : text.trim()));
-      }
-    }
+    if (files.length) addFiles(files);
   };
-
-  const handleIngestPath = () =>
-    withRefresh(async () => {
-      const lines = paths.split("\n").map((l) => l.trim()).filter(Boolean);
-      if (!lines.length) return;
-      setResult(await api.ingestPath(lines));
-    });
 
   const handleIngestUrl = async () => {
     const lines = urls.split("\n").map((l) => l.trim()).filter(Boolean);
@@ -151,13 +157,38 @@ export function IngestTab() {
       setPdfFiles([]);
     });
 
+  const handleCompile = async () => {
+    setResult(null);
+    const res = await startCompile({ model, force, max_source_chars: maxChars });
+    if (res) setResult(res);
+  };
+
+  const handleBuildIndex = async () => {
+    setIndexing(true);
+    setResult(null);
+    try {
+      const res = await api.buildIndex({ force: idxForce });
+      setResult(res);
+      refreshStatus();
+      // Fresh embeddings mean fresh similarity edges.
+      invalidate();
+    } catch (e) {
+      setResult({ returncode: 1, output: String(e), command: "" });
+    } finally {
+      setIndexing(false);
+    }
+  };
+
+  const displayResult = result ?? compileResult;
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Ingest</h1>
-        <p className="text-sm text-zinc-500 mt-1">Add source material to your knowledge base</p>
+        <h1 className="text-2xl font-bold text-zinc-900 tracking-tight">Upload</h1>
+        <p className="text-sm text-zinc-500 mt-1">Add source material to your knowledge base, then compile it into wiki pages</p>
       </div>
 
+      {/* Ingest: Files / URL / PDF */}
       <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden transition-colors duration-150 ease-out">
         <div className="flex overflow-x-auto border-b border-zinc-200 flex-shrink-0">
           {SUB_TABS.map((tab) => (
@@ -227,27 +258,6 @@ export function IngestTab() {
                   </ActionButton>
                 </div>
               )}
-              <div>
-                <label className="text-sm font-medium text-zinc-700">Or ingest by path / glob</label>
-                <textarea
-                  value={paths}
-                  onChange={(e) => setPaths(e.target.value)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    const text = e.dataTransfer.getData("text/plain") || e.dataTransfer.getData("text");
-                    if (text?.trim()) {
-                      setPaths((prev) => (prev ? prev + "\n" + text.trim() : text.trim()));
-                    }
-                  }}
-                  placeholder="/Users/you/Research/*.md\n/Users/you/Research/*.txt"
-                  className="mt-2 w-full h-28 px-3 py-2 border border-zinc-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors duration-150 ease-out"
-                />
-                <div className="mt-2">
-                  <ActionButton onClick={handleIngestPath} loading={loading} disabled={!paths.trim()} loadingText="Ingesting...">
-                    Ingest by Path
-                  </ActionButton>
-                </div>
-              </div>
             </div>
           )}
 
@@ -360,6 +370,55 @@ export function IngestTab() {
         </div>
       </div>
 
+      {/* Compile */}
+      <SectionCard title="Compile Wiki" description="Generate wiki pages from raw sources using the LLM.">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <ModelSelect value={model} />
+          <div>
+            <label className="text-xs text-zinc-500">Max source chars</label>
+            <select value={maxChars} onChange={(e) => setMaxChars(Number(e.target.value))} className="w-full mt-1 px-2 py-1.5 border border-zinc-300 rounded text-sm bg-white focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition-colors duration-150 ease-out">
+              <option value={32000}>32K</option>
+              <option value={55000}>55K</option>
+              <option value={100000}>100K</option>
+              <option value={192000}>192K (default)</option>
+              <option value={250000}>250K (large context)</option>
+              <option value={524288}>512K (max context)</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-2 pt-5 sm:pt-0">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} className="rounded" />
+              <span className="text-sm">Force recompile all docs</span>
+            </label>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <ActionButton onClick={handleCompile} loading={compiling} loadingText="Compiling...">
+            Run Compile
+          </ActionButton>
+          {compiling && (
+            <button
+              onClick={stopCompile}
+              className="ml-3 px-4 py-2 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors duration-150 ease-out"
+            >
+              Stop Compile
+            </button>
+          )}
+        </div>
+      </SectionCard>
+
+      <SectionCard title="FAISS Index" description="Build or rebuild the vector search index.">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-4">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={idxForce} onChange={(e) => setIdxForce(e.target.checked)} className="rounded" />
+            <span className="text-sm">Force rebuild index</span>
+          </label>
+        </div>
+        <ActionButton onClick={handleBuildIndex} loading={indexing} loadingText="Building..." variant="secondary">
+          Build FAISS Index
+        </ActionButton>
+      </SectionCard>
+
       {urlFetching && liveLines.length > 0 && (
         <div className="bg-zinc-800 rounded-xl p-4 transition-colors duration-150 ease-out">
           <div className="flex items-center gap-2 mb-2">
@@ -371,7 +430,26 @@ export function IngestTab() {
         </div>
       )}
 
-      <CommandResultPanel result={result} />
+      {compiling && compileLines.length > 0 && (
+        <div className="bg-zinc-800 rounded p-4 transition-colors duration-150 ease-out">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-violet-400 text-sm animate-pulse">Compiling...</span>
+          </div>
+          <pre ref={compileLiveRef} className="text-xs text-zinc-300 overflow-auto max-h-64">{compileLines.join("\n")}</pre>
+        </div>
+      )}
+
+      <CommandResultPanel result={displayResult} />
+
+      {displayResult?.recommendations && (
+        <RecommendationBar
+          recommendations={displayResult.recommendations}
+          onAction={(rec) => {
+            if (rec.action === "rebuild_index") handleBuildIndex();
+          }}
+          loading={indexing}
+        />
+      )}
     </div>
   );
 }
