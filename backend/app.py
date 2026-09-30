@@ -14,7 +14,7 @@ from typing import List, Optional
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 # ---------------------------------------------------------------------------
@@ -283,6 +283,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class ClientAllowList:
+    """Answer only the listed client IPs; everyone else gets a 403.
+
+    For when the API is bound to the LAN so a UI on another machine can proxy
+    to it (see serve.py). Plain ASGI rather than @app.middleware so streaming
+    responses and client disconnects pass through untouched.
+    """
+
+    def __init__(self, app, allowed: set[str]):
+        self.app = app
+        self.allowed = allowed
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and (scope.get("client") or ("",))[0] not in self.allowed:
+            response = JSONResponse(
+                {"ok": False, "error": {"code": "FORBIDDEN", "message": "Client not in KB_ALLOW_CLIENTS"}},
+                status_code=403,
+            )
+            await response(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+
+_allowed_clients = {c.strip() for c in os.environ.get("KB_ALLOW_CLIENTS", "").split(",") if c.strip()}
+if _allowed_clients:
+    app.add_middleware(ClientAllowList, allowed=_allowed_clients)
 
 
 @app.on_event("startup")
